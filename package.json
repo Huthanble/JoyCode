@@ -4,18 +4,24 @@
   "description": "This is a code intelligent completion plugin that helps you enjoy coding.",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.98.0"
+    "vscode": "^1.97.2"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+  "onLanguage:javascript",
+  "onLanguage:python",
+  "*"
+  ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{
-      "command": "joycode.helloWorld",
-      "title": "Hello World"
-    }]
+    "commands": [
+      {
+        "command": "joycode.helloWorld",
+        "title": "Hello World"
+      }
+    ]
   },
   "scripts": {
     "lint": "eslint .",
@@ -23,11 +29,12 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.98.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "eslint": "^9.21.0",
+    "@types/vscode": "^1.98.0",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.21.0",
+    "vscode": "^1.1.37"
   }
 }
