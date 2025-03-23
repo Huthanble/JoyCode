@@ -7,21 +7,56 @@
     "vscode": "^1.97.2"
   },
   "categories": [
+    "Programming Languages",
+    "Snippets",
     "Other"
   ],
   "activationEvents": [
-  "onLanguage:javascript",
-  "onLanguage:python",
-  "*"
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:python",
+    "onLanguage:java",
+    "onLanguage:c",
+    "onLanguage:cpp"
   ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "joycode.helloWorld",
-        "title": "Hello World"
+        "command": "aiCodeCompletion.toggle",
+        "title": "切换AI代码补全"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "AI Code Completion",
+      "properties": {
+        "aiCodeCompletion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否启用AI代码补全"
+        },
+        "aiCodeCompletion.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "AI模型API密钥"
+        },
+        "aiCodeCompletion.endpoint": {
+          "type": "string",
+          "default": "https://api.openai.com/v1/chat/completions",
+          "description": "AI模型API端点"
+        },
+        "aiCodeCompletion.model": {
+          "type": "string",
+          "default": "gpt-3.5-turbo",
+          "description": "要使用的AI模型名称"
+        },
+        "aiCodeCompletion.useMockResponseForTesting": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否使用模拟响应（仅用于测试）"
+        }
+      }
+    }
   },
   "scripts": {
     "lint": "eslint .",
@@ -35,6 +70,10 @@
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "eslint": "^9.21.0",
-    "vscode": "^1.1.37"
+    "glob": "^7.2.0",
+    "mocha": "^9.2.0"
+  },
+  "dependencies": {
+    "axios": "^0.27.2"
   }
 }
