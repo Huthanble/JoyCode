@@ -1,38 +1,158 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 const vscode = require('vscode');
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+// 当前的虚影装饰类型和内容
+let decorationType = null;
+let currentSuggestion = '';
 
 /**
- * @param {vscode.ExtensionContext} context
+ * 根据语言和输入生成补全建议
  */
-function activate(context) {
+function getSuggestion(document, position) {
+  const language = document.languageId;
+  const line = document.lineAt(position.line);
+  const linePrefix = line.text.substr(0, position.character);
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('恭喜，您的扩展“joycode”已被激活！');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with  registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('joycode.helloWorld', function () {
-		// The code you place here will be executed every time your command is executed
-
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from JoyCode!');
-	});
-
-	context.subscriptions.push(disposable);
+  if (language === 'javascript') {
+    if (linePrefix.endsWith('.')) return 'push()';
+    if (linePrefix.match(/\bfunction\s*$/)) return ' myFunc() { }';
+    return 'console.log()';
+  } else if (language === 'python') {
+    if (linePrefix.endsWith('.')) return 'append()';
+    if (linePrefix.match(/\bdef\s*$/)) return ' my_func():';
+    return 'print()';
+  } else if (language === 'java') {
+    if (linePrefix.endsWith('.')) return 'toString()';
+    if (linePrefix.match(/\bclass\s*$/)) return ' MyClass { }';
+    return 'System.out.println()';
+  } else if (language === 'c' || language === 'cpp') {
+    if (linePrefix.endsWith('.')) return 'member';
+    if (linePrefix.match(/\bint\s*$/)) return ' main() { return 0; }';
+    return 'printf()';
+  }
+  return 'example()'; // 默认建议
 }
 
-// This method is called when your extension is deactivated
+/**
+ * 更新虚影显示
+ */
+function updateGhostText(editor) {
+  if (!editor) return;
+
+  const document = editor.document;
+  const position = editor.selection.active;
+
+  // 清除之前的虚影
+  if (decorationType) {
+    editor.setDecorations(decorationType, []);
+    decorationType.dispose();
+  }
+
+  // 生成新的补全建议
+  currentSuggestion = getSuggestion(document, position);
+  if (!currentSuggestion) return;
+
+  // 创建新的装饰类型（灰色虚影）
+  decorationType = vscode.window.createTextEditorDecorationType({
+    after: {
+      contentText: currentSuggestion, // 虚影内容
+      color: '#99999999',             // 灰色，带透明度
+      fontStyle: 'italic'             // 可选：斜体区分虚影
+    }
+  });
+
+  // 在光标位置显示虚影
+  const range = new vscode.Range(position, position);
+  editor.setDecorations(decorationType, [range]);
+}
+
+/**
+ * 插件激活函数
+ */
+function activate(context) {
+  // 支持的语言
+  const languages = ['javascript', 'python', 'java', 'c', 'cpp'];
+
+  // 监听文本变化
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument(event => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && languages.includes(editor.document.languageId)) {
+        updateGhostText(editor);
+      }
+    })
+  );
+
+  // 监听光标移动
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection(event => {
+      const editor = event.textEditor;
+      if (languages.includes(editor.document.languageId)) {
+        updateGhostText(editor);
+      }
+    })
+  );
+
+  // 注册 Tab 键命令
+  // 保留原有的 type 命令处理器，处理普通按键
+  context.subscriptions.push(
+    vscode.commands.registerCommand('type', (args) => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+
+      // 调试输出每次按键
+      console.log('Type command - Key pressed:', JSON.stringify(args.text));
+
+      // 执行默认的 type 行为
+      vscode.commands.executeCommand('default:type', args);
+    }, { when: 'editorTextFocus' })
+  );
+
+  // 新增 tab 命令处理器，捕获 Tab 键
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tab', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+
+      // 调试输出，确认 Tab 键被捕获
+      console.log('Tab command - Tab pressed, currentSuggestion:', currentSuggestion);
+
+      if (currentSuggestion) {
+        const position = editor.selection.active;
+        editor.edit(editBuilder => {
+          console.log('Inserting:', currentSuggestion);
+          editBuilder.insert(position, currentSuggestion); // 插入虚影内容
+        }).then(() => {
+          // 清除虚影
+          if (decorationType) {
+            editor.setDecorations(decorationType, []);
+            decorationType.dispose();
+            decorationType = null;
+            currentSuggestion = '';
+          }
+        });
+      } else {
+        // 如果没有虚影，执行默认的 Tab 行为（例如缩进）
+        vscode.commands.executeCommand('default:tab');
+      }
+    })
+  );
+  
+
+
+  // 初始化虚影
+  const editor = vscode.window.activeTextEditor;
+  if (editor && languages.includes(editor.document.languageId)) {
+    updateGhostText(editor);
+  }
+}
+
 function deactivate() {
-	console.log('您的扩展“joycode”已被释放！')
+  if (decorationType) {
+    decorationType.dispose();
+  }
 }
 
 module.exports = {
-	activate,
-	deactivate
-}
+  activate,
+  deactivate
+};
