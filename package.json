@@ -21,11 +21,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "type",
-        "title": "Type Command"
-      },
-      {
-        "command": "tab",
+        "command": "joycode.tab",
         "title": "Tab Command"
       }
     ]

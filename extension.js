@@ -105,14 +105,14 @@ function activate(context) {
   );
 
   // 处理普通按键
-  context.subscriptions.push(
-    vscode.commands.registerCommand('type', (args) => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-      console.log('Type command - Key pressed:', JSON.stringify(args.text));
-      vscode.commands.executeCommand('default:type', args);
-    }, { when: 'editorTextFocus' })
-  );
+  // context.subscriptions.push(
+  //   vscode.commands.registerCommand('type', (args) => {
+  //     const editor = vscode.window.activeTextEditor;
+  //     if (!editor) return;
+  //     console.log('Type command - Key pressed:', JSON.stringify(args.text));
+  //     vscode.commands.executeCommand('default:type', args);
+  //   }, { when: 'editorTextFocus' })
+  // );
 
   // 处理 Tab 键
   context.subscriptions.push(
