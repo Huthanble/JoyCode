@@ -1,187 +1,162 @@
 const vscode = require('vscode');
+const { OpenAI } = require('openai'); // 需要安装 OpenAI SDK
 
-const axios = require('axios');
+// 配置 OpenAI API（替换为你的密钥）
+const openai = new OpenAI({
+  apiKey: 'YOUR_OPENAI_API_KEY' // 在 OpenAI 官网获取
+});
+
+// 当前的虚影装饰类型和内容
+let decorationType = null;
+let currentSuggestion = '';
 
 /**
- * 插件激活时执行
- * @param {vscode.ExtensionContext} context
+ * 使用大模型生成补全建议
+ * @param {vscode.TextDocument} document - 当前文档
+ * @param {vscode.Position} position - 光标位置
+ * @returns {Promise<string|null>} - 返回补全建议或 null
+ */
+async function getSuggestion(document, position) {
+  // 获取整个文件内容
+  const fileContent = document.getText();
+  // 计算光标在文件中的字符偏移量
+  const cursorOffset = document.offsetAt(position);
+
+  try {
+    // 调用 OpenAI API
+    const response = await openai.completions.create({
+      model: 'gpt-4',           // 使用 GPT-4 模型（根据你的权限选择）
+      prompt: fileContent,      // 整个文件内容作为提示
+      max_tokens: 50,           // 限制生成长度
+      temperature: 0.5,         // 控制随机性，0.5 较保守
+      stop: ['\n', ';']         // 在换行或分号处停止
+    });
+    // 返回大模型生成的建议，去掉多余空格
+    return response.choices[0].text.trim();
+  } catch (error) {
+    console.error('调用 OpenAI API 出错:', error);
+    return null; // 出错时返回 null，不显示虚影
+  }
+}
+
+/**
+ * 更新虚影显示
+ * @param {vscode.TextEditor} editor - 当前编辑器
+ */
+async function updateGhostText(editor) {
+  if (!editor) return;
+
+  const document = editor.document;
+  const position = editor.selection.active;
+
+  // 清除之前的虚影
+  if (decorationType) {
+    editor.setDecorations(decorationType, []);
+    decorationType.dispose();
+  }
+
+  // 生成新的补全建议（异步）
+  currentSuggestion = await getSuggestion(document, position);
+  if (!currentSuggestion) return;
+
+  // 创建新的装饰类型（灰色虚影）
+  decorationType = vscode.window.createTextEditorDecorationType({
+    after: {
+      contentText: currentSuggestion, // 虚影内容
+      color: '#99999999',             // 灰色，带透明度
+      fontStyle: 'italic'             // 可选：斜体区分虚影
+    }
+  });
+
+  // 在光标位置显示虚影
+  const range = new vscode.Range(position, position);
+  editor.setDecorations(decorationType, [range]);
+}
+
+/**
+ * 插件激活函数
  */
 function activate(context) {
-    console.log('AI代码补全插件已激活');
+  // 支持的语言
+  const languages = ['javascript', 'python', 'java', 'c', 'cpp'];
 
-    // 注册内联补全提供者
-    const inlineCompletionProvider = vscode.languages.registerInlineCompletionItemProvider(
-        [
-            { scheme: 'file', language: 'javascript' },
-            { scheme: 'file', language: 'typescript' },
-            { scheme: 'file', language: 'python' },
-            { scheme: 'file', language: 'java' },
-            { scheme: 'file', language: 'c' },
-            { scheme: 'file', language: 'cpp' }
-        ],
-        new AICodeCompletionProvider()
-    );
+  // 使用防抖优化文本变化监听
+  let timeout;
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument(event => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor && languages.includes(editor.document.languageId)) {
+          updateGhostText(editor);
+        }
+      }, 500); // 500 毫秒防抖
+    })
+  );
 
-    // 添加状态栏项
-    const statusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right,
-        100
-    );
-    statusBarItem.text = '$(sparkle) AI补全';
-    statusBarItem.tooltip = 'AI代码补全已启用';
-    statusBarItem.show();
+  // 监听光标移动
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection(event => {
+      const editor = event.textEditor;
+      if (languages.includes(editor.document.languageId)) {
+        updateGhostText(editor);
+      }
+    })
+  );
 
-    // 注册命令
-    const toggleCommand = vscode.commands.registerCommand('aiCodeCompletion.toggle', () => {
-        const config = vscode.workspace.getConfiguration('aiCodeCompletion');
-        const isEnabled = config.get('enabled');
-        config.update('enabled', !isEnabled, true);
-        statusBarItem.text = !isEnabled ? '$(sparkle) AI补全' : '$(stop) AI补全已禁用';
-        vscode.window.showInformationMessage(`AI代码补全已${!isEnabled ? '启用' : '禁用'}`);
-    });
+  // 处理普通按键
+  context.subscriptions.push(
+    vscode.commands.registerCommand('type', (args) => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      console.log('Type command - Key pressed:', JSON.stringify(args.text));
+      vscode.commands.executeCommand('default:type', args);
+    }, { when: 'editorTextFocus' })
+  );
 
-    statusBarItem.command = 'aiCodeCompletion.toggle';
-    
-    context.subscriptions.push(inlineCompletionProvider, statusBarItem, toggleCommand);
+  // 处理 Tab 键
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tab', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+
+      console.log('Tab command - Tab pressed, currentSuggestion:', currentSuggestion);
+      if (currentSuggestion) {
+        const position = editor.selection.active;
+        editor.edit(editBuilder => {
+          console.log('Inserting:', currentSuggestion);
+          editBuilder.insert(position, currentSuggestion);
+        }).then(() => {
+          if (decorationType) {
+            editor.setDecorations(decorationType, []);
+            decorationType.dispose();
+            decorationType = null;
+            currentSuggestion = '';
+          }
+        });
+      } else {
+        vscode.commands.executeCommand('default:tab');
+      }
+    })
+  );
+
+  // 初始化虚影
+  const editor = vscode.window.activeTextEditor;
+  if (editor && languages.includes(editor.document.languageId)) {
+    updateGhostText(editor);
+  }
 }
 
 /**
- * AI代码补全提供者
+ * 插件关闭清理
  */
-class AICodeCompletionProvider {
-    // 提供内联补全项
-    async provideInlineCompletionItems(document, position, context, token) {
-        // 检查是否启用
-        const config = vscode.workspace.getConfiguration('aiCodeCompletion');
-        if (!config.get('enabled')) {
-            return null;
-        }
-        
-        try {
-            // 获取当前行文本
-            const lineText = document.lineAt(position.line).text;
-            const textBeforeCursor = lineText.substring(0, position.character);
-            
-            // 如果当前行为空或只有空格，则不提供补全
-            if (textBeforeCursor.trim() === '') {
-                return null;
-            }
-            
-            // 获取上下文代码（前后各10行）
-            const startLine = Math.max(0, position.line - 10);
-            const endLine = Math.min(document.lineCount - 1, position.line + 10);
-            
-            let contextCode = '';
-            for (let i = startLine; i <= endLine; i++) {
-                contextCode += document.lineAt(i).text + '\n';
-            }
-            
-            // 获取文件语言
-            const language = document.languageId;
-            
-            // 调用AI获取补全建议
-            const suggestion = await this.getAICompletionSuggestion(
-                textBeforeCursor,
-                contextCode,
-                language
-            );
-            
-            if (!suggestion || suggestion.trim() === '') {
-                return null;
-            }
-            
-            // 创建内联补全项
-            const item = new vscode.InlineCompletionItem(
-                suggestion,
-                new vscode.Range(position, position)
-            );
-            
-            return [item];
-        } catch (error) {
-            console.error('AI代码补全错误:', error);
-            return null;
-        }
-    }
-    
-    /**
-     * 调用AI获取代码补全建议
-     * @param {string} currentText 光标前的文本
-     * @param {string} contextCode 上下文代码
-     * @param {string} language 编程语言
-     * @returns {Promise<string>} 补全建议
-     */
-    async getAICompletionSuggestion(currentText, contextCode, language) {
-        // 从设置中获取API配置
-        const config = vscode.workspace.getConfiguration('aiCodeCompletion');
-        const apiKey = config.get('apiKey');
-        const endpoint = config.get('endpoint');
-        
-        if (!apiKey || !endpoint) {
-            vscode.window.showWarningMessage('请配置AI模型API密钥和端点');
-            return '';
-        }
-        
-        try {
-            // 模拟API调用，正式使用时替换为实际的API调用
-            // 这里展示的是OpenAI API的调用方式，可以替换为其他模型的API
-            const response = await axios.post(
-                endpoint,
-                {
-                    model: config.get('model') || 'gpt-3.5-turbo',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: `你是代码补全助手。针对${language}语言提供简洁准确的代码补全建议。`
-                        },
-                        {
-                            role: 'user',
-                            content: `上下文代码:\n${contextCode}\n\n当前输入: ${currentText}\n补全建议:`
-                        }
-                    ],
-                    temperature: 0.2,
-                    max_tokens: 150,
-                    top_p: 1.0,
-                    frequency_penalty: 0.0,
-                    presence_penalty: 0.0,
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            
-            // 仅在调试时使用的模拟响应
-            // 实际项目中应该直接使用 response.data.choices[0].message.content
-            const mockResponses = {
-                'javascript': ' console.log("Hello World!");',
-                'python': ' print("Hello World!")',
-                'java': ' System.out.println("Hello World!");',
-                'c': ' printf("Hello World!\\n");',
-                'cpp': ' std::cout << "Hello World!" << std::endl;',
-                'typescript': ' console.log("Hello World!");'
-            };
-            
-            // 是否使用模拟响应（仅用于开发时无API密钥的情况）
-            const useMockResponse = config.get('useMockResponseForTesting') || false;
-            
-            if (useMockResponse) {
-                return mockResponses[language] || '';
-            }
-            
-            // 正式调用时使用的代码
-            return response.data.choices[0].message.content;
-        } catch (error) {
-            console.error('AI API调用错误:', error);
-            return '';
-        }
-    }
+function deactivate() {
+  if (decorationType) {
+    decorationType.dispose();
+  }
 }
 
-function deactivate() {}
-
 module.exports = {
-    activate,
-    deactivate
+  activate,
+  deactivate
 };
