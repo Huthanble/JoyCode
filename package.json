@@ -7,8 +7,6 @@
     "vscode": "^1.97.2"
   },
   "categories": [
-    "Programming Languages",
-    "Snippets",
     "Other"
   ],
   "activationEvents": [
@@ -22,17 +20,11 @@
   "main": "./extension.js",
   "contributes": {
     "commands": [
-    ],
-    "configuration": {
-      "title": "Local Code Completion",
-      "properties": {
-        "localCodeCompletion.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "是否启用本地代码补全"
-        }
+      {
+        "command": "joycode.tab",
+        "title": "捕获Tab Command"
       }
-    }
+    ]
   },
   "scripts": {
     "lint": "eslint .",
@@ -48,7 +40,6 @@
     "eslint": "^9.21.0",
     "vscode": "^1.1.37",
     "glob": "^7.2.0",
-    "mocha": "^9.2.0",
-    "typescript": "^4.1.3"
+    "mocha": "^9.2.0"
   }
 }
