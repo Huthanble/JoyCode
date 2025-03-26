@@ -1,9 +1,10 @@
 const vscode = require('vscode');
 const { OpenAI } = require('openai'); // 需要安装 OpenAI SDK
 
-// 配置 OpenAI API（替换为你的密钥）
+// 配置 OpenAI API
 const openai = new OpenAI({
-  apiKey: 'YOUR_OPENAI_API_KEY' // 在 OpenAI 官网获取
+  baseURL: 'https://api.deepseek.com/beta',
+  apiKey: 'sk-601be33605994e94a9598bc0794c1900'
 });
 
 // 当前的虚影装饰类型和内容
@@ -17,19 +18,30 @@ let currentSuggestion = '';
  * @returns {Promise<string|null>} - 返回补全建议或 null
  */
 async function getSuggestion(document, position) {
-  // 获取整个文件内容
-  const fileContent = document.getText();
-  // 计算光标在文件中的字符偏移量
-  const cursorOffset = document.offsetAt(position);
+  const fileContent = document.getText();              // 整个文件内容
+  const lineNumber = position.line + 1;                // 行号（从 1 开始）
+  const columnNumber = position.character + 1;         // 列号（从 1 开始）
+  const language = document.languageId;                // 当前文件语言（如 'javascript'）
+
+  // 构建提示（prompt），明确需求
+  const prompt = `
+以下是当前文件的内容：
+
+${fileContent}
+
+光标位于第 ${lineNumber} 行，第 ${columnNumber} 列。
+
+请根据文件内容，补全光标所在行的代码，确保返回的内容符合 ${language} 的编码格式。
+`;
 
   try {
     // 调用 OpenAI API
     const response = await openai.completions.create({
-      model: 'gpt-4',           // 使用 GPT-4 模型（根据你的权限选择）
-      prompt: fileContent,      // 整个文件内容作为提示
-      max_tokens: 50,           // 限制生成长度
-      temperature: 0.5,         // 控制随机性，0.5 较保守
-      stop: ['\n', ';']         // 在换行或分号处停止
+      model: 'deepseek-chat',    // 使用 deepseek-chat 模型
+      prompt: prompt,            // 改进后的提示
+      max_tokens: 50,            // 限制生成长度
+      temperature: 0.5,          // 控制随机性
+      stop: ['\n', ';']          // 在换行或分号处停止
     });
     // 返回大模型生成的建议，去掉多余空格
     return response.choices[0].text.trim();
@@ -90,7 +102,7 @@ function activate(context) {
         if (editor && languages.includes(editor.document.languageId)) {
           updateGhostText(editor);
         }
-      }, 500); // 500 毫秒防抖
+      }, 5000); // 5秒防抖
     })
   );
 
