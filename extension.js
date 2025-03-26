@@ -22,29 +22,26 @@ async function getSuggestion(document, position) {
   const lineNumber = position.line + 1;                // 行号（从 1 开始）
   const columnNumber = position.character + 1;         // 列号（从 1 开始）
   const language = document.languageId;                // 当前文件语言（如 'javascript'）
+  
+  const line = document.lineAt(position.line);
+  //linePrefix是截取光标前的语句（可能之后可以在这里优化）
+  const linePrefix = line.text;
 
   // 构建提示（prompt），明确需求
-  const prompt = `
-以下是当前文件的内容：
-
-${fileContent}
-
-光标位于第 ${lineNumber} 行，第 ${columnNumber} 列。
-
-请根据文件内容，补全光标所在行的代码，确保返回的内容符合 ${language} 的编码格式。
-`;
+  const prompt = linePrefix;
 
   try {
     // 调用 OpenAI API
     const response = await openai.completions.create({
       model: 'deepseek-chat',    // 使用 deepseek-chat 模型
       prompt: prompt,            // 改进后的提示
-      max_tokens: 50,            // 限制生成长度
+      max_tokens: 20,            // 限制生成长度
       temperature: 0.5,          // 控制随机性
       stop: ['\n', ';']          // 在换行或分号处停止
     });
     // 返回大模型生成的建议，去掉多余空格
     return response.choices[0].text.trim();
+    // return response.choices[0].text;
   } catch (error) {
     console.error('调用 OpenAI API 出错:', error);
     return null; // 出错时返回 null，不显示虚影
