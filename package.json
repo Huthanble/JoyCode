@@ -23,6 +23,18 @@
       {
         "command": "joycode.tab",
         "title": "Tab Command"
+      },
+      {
+        "command": "joycode.generateSuggestion",
+        "title": "Generate Code Suggestion"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "joycode.generateSuggestion",
+        "key": "ctrl+alt+.",
+        "mac": "cmd+alt+.",
+        "when": "editorTextFocus"
       }
     ]
   },
