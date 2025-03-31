@@ -13,7 +13,7 @@ function activate(context) {
   activateCommentToCode(context);
   let disposable = vscode.commands.registerCommand("joycode.openChat", () => {
     // 只有执行 openChat 命令时才会打开 AI Chat 界面
-	activateAiChatCodeGen();
+	activateAiChatCodeGen(context);
   });
 
   context.subscriptions.push(disposable);
