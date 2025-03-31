@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 const vscode = require('vscode');
+<<<<<<< Updated upstream
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -36,3 +37,21 @@ module.exports = {
 	activate,
 	deactivate
 }
+=======
+const { activateCodeCompletion } = require('./src/codeCompletion');
+const { activateAiChatCodeGen } = require('./src/aiChatCodeGen');
+const { activateCommentToCode } = require('./src/commentToCode');
+const { deactivateCodeCompletion } = require('./src/codeCompletion');
+const { deactivateAiChatCodeGen } = require('./src/aiChatCodeGen');
+const { deactivateCommentToCode } = require('./src/commentToCode');
+
+function activate(context) {
+  activateCodeCompletion(context);
+  activateAiChatCodeGen(context);
+  activateCommentToCode(context);
+}
+
+function deactivate() {}
+
+module.exports = { activate, deactivate };
+>>>>>>> Stashed changes
