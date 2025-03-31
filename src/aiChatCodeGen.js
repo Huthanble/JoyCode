@@ -1,7 +1,9 @@
 const vscode = require('vscode');
-const { openai } = require('./openaiClient'); 
+const fs = require('fs');
+const path = require('path');
+const { openai } = require('./openaiClient'); // 确保 openaiClient.js 正确配置
 
-function activateAiChatCodeGen(){
+function activateAiChatCodeGen(context) {
     const panel = vscode.window.createWebviewPanel(
         'chatPanel',
         'AI Chat',
@@ -11,49 +13,55 @@ function activateAiChatCodeGen(){
             retainContextWhenHidden: true,
         }
     );
-    
-    panel.webview.html = getWebviewContent();
-}
 
-function getWebviewContent(){
-    return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Chat</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 10px; }
-        #chatbox { width: 100%; height: 400px; border: 1px solid #ccc; padding: 10px; overflow-y: auto; }
-        input { width: 90%; padding: 5px; }
-        button { padding: 5px 10px; }
-      </style>
-    </head>
-    <body>
-      <div id="chatbox"></div>
-      <input id="message" type="text" placeholder="Type a message..." />
-      <button onclick="sendMessage()">Send</button>
+    // 读取 index.html
+    const htmlPath = path.join(context.extensionPath, 'media', 'index.html');
+    let htmlContent;
 
-      <script>
-        const vscode = acquireVsCodeApi();
-        function sendMessage() {
-          const input = document.getElementById("message");
-          const chatbox = document.getElementById("chatbox");
-          if (input.value.trim() !== "") {
-            chatbox.innerHTML += "<p><strong>You:</strong> " + input.value + "</p>";
-            input.value = "";
-          }
+    try {
+        htmlContent = fs.readFileSync(htmlPath, 'utf8');
+    } catch (error) {
+        console.error("无法读取 HTML 文件:", error);
+        vscode.window.showErrorMessage("无法加载聊天窗口的 HTML 文件。");
+        return;
+    }
+
+    panel.webview.html = htmlContent;
+
+    // 监听前端发送的消息
+    panel.webview.onDidReceiveMessage(async (message) => {
+        if (message.command === 'askAI') {
+            const userInput = message.text;
+
+            if (!userInput || userInput.trim() === '') {
+                panel.webview.postMessage({ command: "response", text: "输入不能为空，请重新输入。" });
+                return;
+            }
+
+            try {
+                const response = await openai.chat.completions.create({
+                    model: "deepseek-chat",
+                    messages: [{ role: "user", content: userInput }],
+                });
+
+                const reply = response.choices[0]?.message?.content || "AI 无法生成回复。";
+                panel.webview.postMessage({ command: "response", text: reply });
+            } catch (error) {
+                console.error("OpenAI 请求失败:", error);
+                panel.webview.postMessage({ command: "response", text: "对不起，AI 无法生成回复。" });
+            }
         }
-      </script>
-    </body>
-    </html>
-  `;
-}
-function deactivateAiChatCodeGen(){
+    });
 
+    // 处理面板销毁时的清理
+    panel.onDidDispose(() => {
+        console.log("AI Chat 面板已关闭。");
+    });
 }
+
+function deactivateAiChatCodeGen() {}
+
 module.exports = { 
     activateAiChatCodeGen,
     deactivateAiChatCodeGen
- };
+};
