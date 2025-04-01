@@ -131,6 +131,8 @@ function activate(context) {
   );
 
   // 注册内联补全提供程序
+  //vscode提供的这个方法好像内嵌一个防抖的机制，只有在用户输入完成一段时间后才会生成内联代码
+  //不过不清楚具体的延迟是多少
   context.subscriptions.push(
     vscode.languages.registerInlineCompletionItemProvider(
       languages.map(lang => ({ language: lang })), // 仅支持指定的语言
