@@ -19,14 +19,24 @@
   ],
   "main": "./extension.js",
   "contributes": {
+    "configuration": {
+      "title": "JoyCode",
+      "properties": {
+        "joycode.enableAutoTrigger": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用自动触发代码补全。禁用后，只能通过快捷键(Alt+Ctrl+.)手动触发。"
+        }
+      }
+    },
     "commands": [
-      {
-        "command": "joycode.tab",
-        "title": "Tab Command"
-      },
       {
         "command": "joycode.generateSuggestion",
         "title": "Generate Code Suggestion"
+      },
+      {
+        "command": "joycode.toggleAutoTrigger",
+        "title": "JoyCode: 切换自动触发功能"
       }
     ],
     "keybindings": [
