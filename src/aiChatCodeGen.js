@@ -13,6 +13,10 @@ function activateAiChatCodeGen(context) {
             retainContextWhenHidden: true,
         }
     );
+    // 生成头像路径
+    const userAvatarUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'user.png')));
+    const aiAvatarUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'ai.png')));
+
 
     // 读取 index.html
     const htmlPath = path.join(context.extensionPath, 'media', 'index.html');
@@ -26,7 +30,14 @@ function activateAiChatCodeGen(context) {
         return;
     }
 
-    panel.webview.html = htmlContent;
+    // 将头像路径注入到 HTML 中
+    panel.webview.html = `
+        <script>
+            const userAvatarUri = "${userAvatarUri}";
+            const aiAvatarUri = "${aiAvatarUri}";
+        </script>
+        ${htmlContent}
+    `;
 
     // 监听前端发送的消息
     panel.webview.onDidReceiveMessage(async (message) => {
@@ -49,6 +60,22 @@ function activateAiChatCodeGen(context) {
             } catch (error) {
                 console.error("OpenAI 请求失败:", error);
                 panel.webview.postMessage({ command: "response", text: "对不起，AI 无法生成回复。" });
+            }
+        }
+        if(message.command==='insertCode'){
+            const editor = vscode.window.activeTextEditor;
+            if (editor) {
+                editor.edit((editBuilder) => {
+                    editBuilder.insert(editor.selection.active, message.code);
+                }).then((success) => {
+                    if (success) {
+                        vscode.window.showInformationMessage('代码已成功插入到光标位置！');
+                    } else {
+                        vscode.window.showErrorMessage('代码插入失败，请重试。');
+                    }
+                });
+            } else {
+                vscode.window.showErrorMessage('当前没有活动的编辑器，无法插入代码。');
             }
         }
     });
