@@ -10,9 +10,9 @@
     "Other"
   ],
   "activationEvents": [
-  "onLanguage:javascript",
-  "onLanguage:python",
-  "*"
+    "onLanguage:javascript",
+    "onLanguage:python",
+    "*"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -40,6 +40,7 @@
         }
       ]
     }
+
   },
   "scripts": {
     "lint": "eslint .",
@@ -58,7 +59,6 @@
   },
   "dependencies": {
     "axios": "^0.27.2",
-
-    "openai": "^4.91.1"
+    "openai": "^4.90.0"
   }
 }
