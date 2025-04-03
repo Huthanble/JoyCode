@@ -13,7 +13,7 @@ async function generateCodeFromComment() {
       vscode.window.showErrorMessage('请在注释行调用此功能，例如选中 // 创建一个 REST API 服务器');
       return;
     }
-    const prompt = `根据这个注释只生成代码: ${selectedText.replace('//', '').trim()}`; 
+    const prompt = `根据这个注释只生成代码不生产多余文字: ${selectedText.replace('//', '').trim()}`; 
     console.log('Prompt:', prompt); 
     vscode.window.withProgress(
       {
