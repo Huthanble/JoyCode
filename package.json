@@ -24,8 +24,23 @@
       {
         "command": "joycode.openChat",
         "title": "打开聊天窗口"
+      },
+      {
+        "command": "extension.commentToCode",
+        "title": "将注释转换为代码"
       }
-    ]
+    ],
+  
+    "menus":{
+      "editor/context": [
+        {
+          "command": "extension.commentToCode",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
+    
   },
   "scripts": {
     "lint": "eslint .",
