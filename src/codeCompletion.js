@@ -26,7 +26,7 @@ async function getSuggestion(document, position) {
 
   // 构建提示（prompt），明确需求
   const prompt = linePrefix;
-
+  console.log('Prompt:', prompt); // 调试输出提示内容
   try {
     // 调用 OpenAI API
     const response = await openai.completions.create({
