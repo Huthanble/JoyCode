@@ -1,12 +1,55 @@
 const vscode = require('vscode');
-const { openai } = require('./openaiClient'); // 需要安装 OpenAI SDK
+const { OpenAI } = require('openai');
 
+// 配置 DeepSeek API
+const openai = new OpenAI({
+  baseURL: 'https://api.deepseek.com/beta',
+  apiKey: 'sk-601be33605994e94a9598bc0794c1900'
+});
 
+// 用于显示加载提示的装饰器
+let loadingDecorationType = null;
+// 标记是否由命令手动触发
+let isManuallyTriggered = false;
 
+/**
+ * 显示加载提示
+ * @param {vscode.TextEditor} editor - 当前编辑器
+ */
+function showLoadingIndicator(editor) {
+  if (!editor) return;
+  
+  // 清除之前的加载提示
+  hideLoadingIndicator();
+  
+  // 创建新的装饰类型
+  loadingDecorationType = vscode.window.createTextEditorDecorationType({
+    after: {
+      contentText: '代码生成中...',
+      color: '#888888',
+      fontStyle: 'italic'
+    }
+  });
+  
+  // 在光标位置显示加载提示
+  const position = editor.selection.active;
+  const range = new vscode.Range(position, position);
+  editor.setDecorations(loadingDecorationType, [range]);
+}
 
-// 当前的虚影装饰类型和内容
-let decorationType = null;
-let currentSuggestion = '';
+/**
+ * 隐藏加载提示
+ */
+function hideLoadingIndicator() {
+  if (loadingDecorationType) {
+    // 获取所有编辑器
+    vscode.window.visibleTextEditors.forEach(editor => {
+      editor.setDecorations(loadingDecorationType, []);
+    });
+    loadingDecorationType.dispose();
+    loadingDecorationType = null;
+  }
+}
 
 /**
  * 使用大模型生成补全建议
@@ -15,155 +58,146 @@ let currentSuggestion = '';
  * @returns {Promise<string|null>} - 返回补全建议或 null
  */
 async function getSuggestion(document, position) {
-  const fileContent = document.getText();              // 整个文件内容
-  const lineNumber = position.line + 1;                // 行号（从 1 开始）
-  const columnNumber = position.character + 1;         // 列号（从 1 开始）
-  const language = document.languageId;                // 当前文件语言（如 'javascript'）
-  
-  const line = document.lineAt(position.line);
-  //linePrefix是截取光标前的语句（可能之后可以在这里优化）
-  const linePrefix = line.text;
-
-  // 构建提示（prompt），明确需求
-  const prompt = linePrefix;
+  const fullText = document.getText();
+  const cursorOffset = document.offsetAt(position);
+  const prompt = fullText.slice(0, cursorOffset);
+  const suffix = fullText.slice(cursorOffset);
 
   try {
-    // 调用 OpenAI API
     const response = await openai.completions.create({
-      model: 'deepseek-chat',    // 使用 deepseek-chat 模型
-      prompt: prompt,            // 改进后的提示
-      max_tokens: 20,            // 限制生成长度
-      temperature: 0.5,          // 控制随机性
-      stop: ['\n', ';']          // 在换行或分号处停止
+      model: 'deepseek-chat',
+      prompt: prompt,
+      suffix: suffix,
+      max_tokens: 100,
+      temperature: 0.5,
+      stop: ['\n\n']
     });
-    // 返回大模型生成的建议，去掉多余空格
     return response.choices[0].text.trim();
-    // return response.choices[0].text;
   } catch (error) {
-    console.error('调用 OpenAI API 出错:', error);
-    return null; // 出错时返回 null，不显示虚影
+    console.error('调用 DeepSeek API 出错:', error);
+    return null;
   }
 }
 
 /**
- * 更新虚影显示
- * @param {vscode.TextEditor} editor - 当前编辑器
+ * 获取自动触发开关状态
+ * @returns {boolean} - 是否启用自动触发
  */
-async function updateGhostText(editor) {
-  if (!editor) return;
-
-  const document = editor.document;
-  const position = editor.selection.active;
-
-  // 清除之前的虚影
-  if (decorationType) {
-    editor.setDecorations(decorationType, []);
-    decorationType.dispose();
-  }
-
-  // 生成新的补全建议（异步）
-  currentSuggestion = await getSuggestion(document, position);
-  if (!currentSuggestion) return;
-
-  // 创建新的装饰类型（灰色虚影）
-  decorationType = vscode.window.createTextEditorDecorationType({
-    after: {
-      contentText: currentSuggestion, // 虚影内容
-      color: '#99999999',             // 灰色，带透明度
-      fontStyle: 'italic'             // 可选：斜体区分虚影
-    }
-  });
-
-  // 在光标位置显示虚影
-  const range = new vscode.Range(position, position);
-  editor.setDecorations(decorationType, [range]);
+function isAutoTriggerEnabled() {
+  return vscode.workspace.getConfiguration('joycode').get('enableAutoTrigger', true);
 }
 
 /**
  * 插件激活函数
  */
-function activateCodeCompletion(context) {
-  // 支持的语言
+function activate(context) {
   const languages = ['javascript', 'python', 'java', 'c', 'cpp'];
 
-  // 使用防抖优化文本变化监听
-  let timeout;
+  // 注册配置变更事件
   context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument(event => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        const editor = vscode.window.activeTextEditor;
-        if (editor && languages.includes(editor.document.languageId)) {
-          updateGhostText(editor);
-        }
-      }, 5000); // 5秒防抖
-    })
-  );
-
-  // 监听光标移动
-  context.subscriptions.push(
-    vscode.window.onDidChangeTextEditorSelection(event => {
-      const editor = event.textEditor;
-      if (languages.includes(editor.document.languageId)) {
-        updateGhostText(editor);
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('joycode.enableAutoTrigger')) {
+        // 配置已更改，可以在这里添加额外的处理逻辑
+        console.log('自动触发设置已更改为:', isAutoTriggerEnabled());
       }
     })
   );
 
-  // 处理普通按键
-  // context.subscriptions.push(
-  //   vscode.commands.registerCommand('type', (args) => {
-  //     const editor = vscode.window.activeTextEditor;
-  //     if (!editor) return;
-  //     console.log('Type command - Key pressed:', JSON.stringify(args.text));
-  //     vscode.commands.executeCommand('default:type', args);
-  //   }, { when: 'editorTextFocus' })
-  // );
-
-  // 处理 Tab 键
+  // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
   context.subscriptions.push(
-    vscode.commands.registerCommand('tab', () => {
+    vscode.commands.registerCommand('joycode.generateSuggestion', async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-
-      console.log('Tab command - Tab pressed, currentSuggestion:', currentSuggestion);
-      if (currentSuggestion) {
-        const position = editor.selection.active;
-        editor.edit(editBuilder => {
-          console.log('Inserting:', currentSuggestion);
-          editBuilder.insert(position, currentSuggestion);
-        }).then(() => {
-          if (decorationType) {
-            editor.setDecorations(decorationType, []);
-            decorationType.dispose();
-            decorationType = null;
-            currentSuggestion = '';
-          }
-        });
-      } else {
-        vscode.commands.executeCommand('default:tab');
+      if (!editor || !languages.includes(editor.document.languageId)) return;
+      
+      // 显示加载提示
+      showLoadingIndicator(editor);
+      
+      try {
+        // 标记为手动触发
+        isManuallyTriggered = true;
+        
+        // 触发内联补全
+        await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+      } finally {
+        // 重置标记
+        setTimeout(() => {
+          isManuallyTriggered = false;
+        }, 500);
+        
+        // 无论成功与否，都隐藏加载提示
+        hideLoadingIndicator();
       }
     })
   );
 
-  // 初始化虚影
-  const editor = vscode.window.activeTextEditor;
-  if (editor && languages.includes(editor.document.languageId)) {
-    updateGhostText(editor);
-  }
+  // 注册内联补全提供程序
+  //vscode提供的这个方法好像内嵌一个防抖的机制，只有在用户输入完成一段时间后才会生成内联代码
+  //不过不清楚具体的延迟是多少
+  context.subscriptions.push(
+    vscode.languages.registerInlineCompletionItemProvider(
+      languages.map(lang => ({ language: lang })), // 仅支持指定的语言
+      {
+        provideInlineCompletionItems: async (document, position, context, token) => {
+          // 检查是否应该提供补全
+          const autoTriggerEnabled = isAutoTriggerEnabled();
+          
+          // 如果自动触发被禁用且不是手动触发，则不提供补全
+          if (!autoTriggerEnabled && !isManuallyTriggered) {
+            return null;
+          }
+          
+          if(isManuallyTriggered){
+            // 显示加载提示
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document === document) {
+              showLoadingIndicator(editor);
+            }
+          }
+          
+          try {
+            // 获取建议
+            const suggestion = await getSuggestion(document, position);
+            if (!suggestion) return null;
+            
+            // 创建内联补全项
+            const item = new vscode.InlineCompletionItem(suggestion);
+            item.range = new vscode.Range(position, position);
+            
+            return [item];
+          } finally {
+            // 隐藏加载提示
+            hideLoadingIndicator();
+          }
+        }
+      }
+    )
+  );
+  
+  // 注册命令来切换自动触发功能
+  context.subscriptions.push(
+    vscode.commands.registerCommand('joycode.toggleAutoTrigger', async () => {
+      const currentValue = isAutoTriggerEnabled();
+      await vscode.workspace.getConfiguration('joycode').update('enableAutoTrigger', !currentValue, true);
+      vscode.window.showInformationMessage(`代码自动补全已${!currentValue ? '启用' : '禁用'}`);
+    })
+  );
+  
+  // 监听编辑器关闭事件，确保清理装饰器
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors(() => {
+      hideLoadingIndicator();
+    })
+  );
 }
 
 /**
  * 插件关闭清理
  */
-function deactivateCodeCompletion() {
-  if (decorationType) {
-    decorationType.dispose();
-  }
+function deactivate() {
+  hideLoadingIndicator();
 }
 
 module.exports = {
-
-  activateCodeCompletion,
-  deactivateCodeCompletion
+  activate,
+  deactivate
 };
