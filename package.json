@@ -45,6 +45,10 @@
       {
         "command": "joycode.toggleAutoTrigger",
         "title": "JoyCode: 切换自动触发功能"
+      },
+      {
+        "command": "extension.commentToCode",
+        "title": "将注释转换为代码"
       }
     ],
     "keybindings": [
@@ -54,7 +58,18 @@
         "mac": "cmd+alt+.",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+  
+    "menus":{
+      "editor/context": [
+        {
+          "command": "extension.commentToCode",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
+    
   },
   "scripts": {
     "lint": "eslint .",
