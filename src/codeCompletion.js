@@ -68,7 +68,7 @@ async function getSuggestion(document, position) {
       model: 'deepseek-chat',
       prompt: prompt,
       suffix: suffix,
-      max_tokens: 100,
+      max_tokens: 200,
       temperature: 0.5,
       stop: ['\n\n']
     });
@@ -90,7 +90,7 @@ function isAutoTriggerEnabled() {
 /**
  * 插件激活函数
  */
-function activate(context) {
+function activateCodeCompletion(context) {
   const languages = ['javascript', 'python', 'java', 'c', 'cpp'];
 
   // 注册配置变更事件
@@ -193,11 +193,11 @@ function activate(context) {
 /**
  * 插件关闭清理
  */
-function deactivate() {
+function deactivateCodeCompletion() {
   hideLoadingIndicator();
 }
 
 module.exports = {
-  activate,
-  deactivate
+  activateCodeCompletion,
+  deactivateCodeCompletion
 };
