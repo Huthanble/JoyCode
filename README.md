@@ -172,6 +172,113 @@ This is the README for your extension "joycode". After writing up a brief descri
 
 ---
 
+# AIChatCodeGen模块
+
+## 功能介绍
+- 实现了用户在文本编辑器中与 AI 进行对话的功能
+- 用户可以通过按下`ctrl+shift+P`，在弹出的文本框中输入*打开聊天窗口*，即可打开聊天窗口
+- 在聊天窗口中，用户可以输入问题，插件会将问题发送给 OpenAI 的 API，并在聊天窗口中显示 AI 的回答
+- 在index.html中，描述了聊天窗口的样式和布局
+
+## 函数介绍
+
+### 1.activateCodeCompletion(context)
+
+#### 描述
+**描述：** 此函数激活VSCode扩展，创建并配置一个交互式webview面板。
+
+#### 参数
+- **context**: `vscode.ExtensionContext`  
+  *插件的上下文对象，用于注册命令和事件监听。*
+
+#### 主要操作
+1.创建侧边栏Webview面板
+2.加载本地资源
+3.注入用户和头像路径
+4.设置消息监听器处理
+
+#### 返回值
+无返回值
+
+### 2.deactivateCodeCompletion()
+
+#### 描述
+**描述：** 此函数停用VSCode扩展，清除Webview面板。
+
+#### 参数
+无参数
+
+#### 主要操作
+1.检查Webview面板是否存在
+2.如果存在，则调用dispose()方法清除Webview面板
+3.将Webview面板设置为null
+
+#### 返回值
+无返回值
+
+# index.html
+
+## 描述
+**描述：** 此文件定义了聊天窗口的HTML结构和样式。
+
+## 功能介绍
+设计了一个简洁的聊天窗口，包含以下元素：
+- 聊天区域：用于显示用户和AI的对话。在代码块区域具有**复制**和**在光标处插入**的功能
+- 用户输入框：用于输入用户的问题
+- 发送按钮：用于发送用户输入的问题
+
+## 函数介绍
+
+### 1. sendMessage()
+
+#### 描述
+**描述：** 此函数用于获取用户的输入。当检测到用户的输入不为空字符时，设置欢迎消息为隐藏状态。
+调用**vscode.postMessage()**与主机扩展之间进行通信
+
+#### 参数
+无参数
+
+### 2.appendMessage(sender, text, isMarkdown = false)
+
+#### 描述
+**描述：** 此函数用于在聊天区域中添加消息。根据发送者（用户或AI）设置不同的样式和布局。ai回复支持打字机式的逐字显示，并进行Markdown渲染，自动解析Markdown语法（含代码高亮）。
+
+#### 参数
+- **sender**: `string`  
+  *消息的发送者，可以是 "user" 或 "ai"。*
+- **text**: `string`
+    *要显示的消息文本。*
+- **isMarkdown**: `boolean`
+    *是否将消息文本作为Markdown格式进行渲染，默认为false。*
+
+#### 主要操作
+1.根据发送者设置不同的样式和布局。如果发送者是AI，则使用打字机式的逐字显示效果；如果发送者是用户，则直接显示消息文本
+2.如果isMarkdown为true，则使用marked.js库将消息文本解析为HTML格式，并进行Markdown渲染
+3.将消息文本添加到聊天区域中
+
+#### 返回值
+无返回值
+
+### 3.processCodeBlocks(container)
+
+#### 描述
+**描述：** 此函数用于处理聊天区域中的代码块。它会查找所有的代码块元素，并为每个代码块添加复制和插入按钮，并替换原有的代码块。
+
+#### 参数
+- **container**: `HTMLElement`  
+  *聊天区域的容器元素。*
+
+#### 主要操作
+1.**代码语法高亮：**使用 Highlight.js 实现
+2.**添加实用操作按钮**：复制代码，并插入到编辑器
+3.**防止重复处理**：通过标记检测避免重复渲染
+
+#### 返回值
+无返回值
+---
+
+
+
 ## Features
 
 Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
