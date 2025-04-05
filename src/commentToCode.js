@@ -15,6 +15,8 @@ async function generateCodeFromComment() {
     }
     const prompt = `根据这个注释只生成代码不生产多余文字: ${selectedText.replace('//', '').trim()}`; 
     console.log('Prompt:', prompt); 
+    
+  
     vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
