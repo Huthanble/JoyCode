@@ -238,75 +238,76 @@
                 appendMessage('ai', message.text, true); // 渲染 Markdown
             }
         });
+        
         function appendMessage(sender, text, isMarkdown = false) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
 
-    // 添加头像
-    const avatar = document.createElement('img');
-    avatar.src = sender === 'user' ? userAvatarUri : aiAvatarUri;
-    avatar.alt = sender === 'user' ? '用户头像' : 'AI头像';
-    avatar.className = 'avatar';
+            // 添加头像
+            const avatar = document.createElement('img');
+            avatar.src = sender === 'user' ? userAvatarUri : aiAvatarUri;
+            avatar.alt = sender === 'user' ? '用户头像' : 'AI头像';
+            avatar.className = 'avatar';
 
-    // 添加消息内容容器
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    
-    // 将头像和消息内容添加到消息容器
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
+            // 添加消息内容容器
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // 将头像和消息内容添加到消息容器
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
 
-    // 将消息容器添加到消息列表
-    messagesDiv.appendChild(messageDiv);
-    
-    // 如果是AI消息且需要逐字显示
-    if (sender === 'ai') {
-        let index = 0;
-        const speed = 20; // 控制显示速度（毫秒）
-        
-        // 创建临时元素用于逐步添加内容
-        const tempDiv = document.createElement('div');
-        
-        function typeWriter() {
-            if (index < text.length) {
-                // 添加下一个字符
-                tempDiv.textContent = text.substring(0, index + 1);
+            // 将消息容器添加到消息列表
+            messagesDiv.appendChild(messageDiv);
+            
+            // 如果是AI消息且需要逐字显示
+            if (sender === 'ai') {
+                let index = 0;
+                const speed = 20; // 控制显示速度（毫秒）
                 
+                // 创建临时元素用于逐步添加内容
+                const tempDiv = document.createElement('div');
+                
+                function typeWriter() {
+                    if (index < text.length) {
+                        // 添加下一个字符
+                        tempDiv.textContent = text.substring(0, index + 1);
+                        
+                        if (isMarkdown) {
+                            // 使用 marked.js 渲染 Markdown
+                            const htmlContent = marked.parse(tempDiv.textContent);
+                            contentDiv.innerHTML = htmlContent;
+                            
+                            // 实时处理代码块（即使未完全显示）
+                            processCodeBlocks(contentDiv);
+                        } else {
+                            contentDiv.textContent = tempDiv.textContent;
+                        }
+                        
+                        index++;
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        setTimeout(typeWriter, speed);
+                    } else {
+                        // 最终确保所有代码块都处理完毕
+                        if (isMarkdown) {
+                            processCodeBlocks(contentDiv);
+                        }
+                    }
+                }
+                
+                typeWriter();
+            } else {
+                // 用户消息直接显示
                 if (isMarkdown) {
-                    // 使用 marked.js 渲染 Markdown
-                    const htmlContent = marked.parse(tempDiv.textContent);
+                    const htmlContent = marked.parse(text);
                     contentDiv.innerHTML = htmlContent;
-                    
-                    // 实时处理代码块（即使未完全显示）
                     processCodeBlocks(contentDiv);
                 } else {
-                    contentDiv.textContent = tempDiv.textContent;
+                    contentDiv.textContent = text;
                 }
-                
-                index++;
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                setTimeout(typeWriter, speed);
-            } else {
-                // 最终确保所有代码块都处理完毕
-                if (isMarkdown) {
-                    processCodeBlocks(contentDiv);
-                }
             }
         }
-        
-        typeWriter();
-    } else {
-        // 用户消息直接显示
-        if (isMarkdown) {
-            const htmlContent = marked.parse(text);
-            contentDiv.innerHTML = htmlContent;
-            processCodeBlocks(contentDiv);
-        } else {
-            contentDiv.textContent = text;
-        }
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-}
 
 // 单独提取处理代码块的函数
 function processCodeBlocks(container) {
