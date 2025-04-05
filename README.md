@@ -30,10 +30,14 @@ This is the README for your extension "joycode". After writing up a brief descri
 └── README.md
 
 
-## CommentToCode
+# CommentToCode模块
 
-|——activateCommentToCode(context)   //用于定义启动方式
-|   |——generateCodeFromComment()    //用于具体实现将注释转化为代码
+##功能介绍  
+    用于实现直接将注释转换为代码
+
+##函数结构  
+|——activateCommentToCode(context)   //用于定义启动方式  
+|   |——generateCodeFromComment()    //用于具体实现将注释转化为代码  
 |——deactivateCommentToCode()        //用于定义释放资源方式
 
 ---
