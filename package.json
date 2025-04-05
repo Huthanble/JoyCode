@@ -11,11 +11,24 @@
   ],
   "activationEvents": [
     "onLanguage:javascript",
+    "onLanguage:typescript",
     "onLanguage:python",
-    "*"
+    "onLanguage:java",
+    "onLanguage:c",
+    "onLanguage:cpp"
   ],
   "main": "./extension.js",
   "contributes": {
+    "configuration": {
+      "title": "JoyCode",
+      "properties": {
+        "joycode.enableAutoTrigger": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用自动触发代码补全。禁用后，只能通过快捷键(Alt+Ctrl+.)手动触发。"
+        }
+      }
+    },
     "commands": [
       {
         "command": "joycode.helloWorld",
@@ -24,8 +37,39 @@
       {
         "command": "joycode.openChat",
         "title": "打开聊天窗口"
+      },
+      {
+        "command": "joycode.generateSuggestion",
+        "title": "手动触发自动补全功能"
+      },
+      {
+        "command": "joycode.toggleAutoTrigger",
+        "title": "JoyCode: 切换自动触发功能"
+      },
+      {
+        "command": "extension.commentToCode",
+        "title": "将注释转换为代码"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "joycode.generateSuggestion",
+        "key": "ctrl+alt+.",
+        "mac": "cmd+alt+.",
+        "when": "editorTextFocus"
+      }
+    ],
+  
+    "menus":{
+      "editor/context": [
+        {
+          "command": "extension.commentToCode",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
+    
   },
   "scripts": {
     "lint": "eslint .",
