@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- 引入 marked.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/vs2015.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--vscode-editor-background);
+            color:var(--vscode-editor-foreground);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #chat-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+            max-width: 98%;
+            margin: auto;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #messages {
+            flex: 1;
+            min-height: 100px; /* 确保有最小高度 */
+            min-width: 100%; /* 确保宽度撑满父容器 */
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px; /* 头像和消息内容之间的间距 */
+        }
+        .message.user {
+            flex-direction: row-reverse; /* 用户消息在右侧显示 */
+            align-self: flex-end;
+            background-color: transparent;
+            color: var(--vscode-button-foreground);
+        }
+        .message.ai {
+            flex-direction: row;
+            align-self: flex-start;
+            background-color: var(--vscode-editorHoverWidget-background);
+            color: var(--vscode-editorHoverWidget-foreground);
+        }
+        .message.ai p {
+            margin: 0;
+        }
+        .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%; /* 圆形头像 */
+            object-fit: cover; /* 确保图片适应容器 */
+            border: 1px solid #ddd; /* 可选：添加边框 */
+        }
+        .message div {
+            max-width: 100%;
+            padding: 10px 15px;
+            border-radius: 15px;
+            font-size: 15px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .message.user div {
+            background-color: transparent;
+            color: var(--vscode-button-foreground);
+        }
+
+        .message.ai div {
+            background-color: var(--vscode-editorHoverWidget-background);
+            color: var(--vscode-editorHoverWidget-foreground);
+        }
+        .code-block {
+            background-color: #373737 !important;
+            border: 1px solid #545353;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            position: relative;
+        }
+        .code-block-buttons {
+            background-color: transparent !important;
+            display: flex;
+            justify-content: flex-end;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .code-block-buttons button {
+            padding: 5px 10px;
+            font-size: 12px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .copy-button {
+            color:#bdbdbd;
+            display: flex;
+            align-items: center;
+            background-color: transparent;
+            justify-content: center;
+            padding: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            border: none;
+        }
+        .copy-button i {
+            font-size: 14px; /* 图标大小 */
+        }
+        .copy-button:hover {
+            background-color: #7a7b7c;
+        }
+        .insert-button {
+            color: white;
+            display: flex;
+            background-color: transparent;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            border: none;
+        }
+        .insert-button i {
+            font-size: 14px; /* 图标大小 */
+        }
+        .insert-button:hover {
+            background-color: #7a7b7c;
+        }
+        #input-container {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            box-sizing: border-box;
+            padding: 10px;
+            border-top: 1px solid #454343;
+            background: rgba(var(--vscode-editorHoverWidget-background-rgb), 0.8);
+        }
+        #input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        #send {
+            margin-left: 10px;
+            padding: 10px;
+            background-color: transparent;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px; /* 调整图标大小 */
+            color: var(--vscode-button-foreground);
+            box-sizing: border-box;
+        }
+        #send:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        #send i {
+            font-size: 18px; /* 图标大小 */
+        }
+        #welcome-message {
+            font-size: 17px;
+            font-weight: bold;
+            color: var(--vscode-editorHoverWidget-foreground);
+            margin-bottom: 10px;
+            max-width: 70%; /* 限制最大宽度 */
+            text-align: center; /* 居中对齐 */
+            margin: 0 auto; /* 水平居中 */
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="messages">
+            <div id="welcome-message" class="message ai"></div>
+        </div>
+        <div id="status" style="text-align: center; font-size: 12px; color: gray; display: none;">正在等待AI回复...</div>
+        <div id="input-container">
+            <input id="input" type="text" placeholder="向JoyCode提问" />
+            <button id="send">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        const messagesDiv = document.getElementById('messages');
+        const input = document.getElementById('input');
+        const sendButton = document.getElementById('send');
+        const statusDiv=document.getElementById('status');
+                
+        sendButton.addEventListener('click', sendMessage);
+        input.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const text = input.value.trim();
+            if (text) {
+                const welcomeMessage = document.getElementById('welcome-message');
+                if (welcomeMessage) {
+                    welcomeMessage.style.display = 'none'; // 隐藏欢迎消息
+                }
+
+                appendMessage('user', text);
+                vscode.postMessage({ command: 'askAI', text });
+                input.value = '';
+                showStatus('正在等待AI回复...'); // 显示状态
+            }
+        }
+
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+            if (message.command === 'response') {
+                hideStatus(); // 隐藏状态
+                appendMessage('ai', message.text, true); // 渲染 Markdown
+            }
+        });
+        
+        function appendMessage(sender, text, isMarkdown = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+
+            // 添加头像
+            const avatar = document.createElement('img');
+            avatar.src = sender === 'user' ? userAvatarUri : aiAvatarUri;
+            avatar.alt = sender === 'user' ? '用户头像' : 'AI头像';
+            avatar.className = 'avatar';
+
+            // 添加消息内容容器
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // 将头像和消息内容添加到消息容器
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+
+            // 将消息容器添加到消息列表
+            messagesDiv.appendChild(messageDiv);
+            
+            // 如果是AI消息且需要逐字显示
+            if (sender === 'ai') {
+                let index = 0;
+                const speed = 20; // 控制显示速度（毫秒）
+                
+                // 创建临时元素用于逐步添加内容
+                const tempDiv = document.createElement('div');
+                
+                function typeWriter() {
+                    if (index < text.length) {
+                        // 添加下一个字符
+                        tempDiv.textContent = text.substring(0, index + 1);
+                        
+                        if (isMarkdown) {
+                            // 使用 marked.js 渲染 Markdown
+                            const htmlContent = marked.parse(tempDiv.textContent);
+                            contentDiv.innerHTML = htmlContent;
+                            
+                            // 实时处理代码块（即使未完全显示）
+                            processCodeBlocks(contentDiv);
+                        } else {
+                            contentDiv.textContent = tempDiv.textContent;
+                        }
+                        
+                        index++;
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        setTimeout(typeWriter, speed);
+                    } else {
+                        // 最终确保所有代码块都处理完毕
+                        if (isMarkdown) {
+                            processCodeBlocks(contentDiv);
+                        }
+                    }
+                }
+                
+                typeWriter();
+            } else {
+                // 用户消息直接显示
+                if (isMarkdown) {
+                    const htmlContent = marked.parse(text);
+                    contentDiv.innerHTML = htmlContent;
+                    processCodeBlocks(contentDiv);
+                } else {
+                    contentDiv.textContent = text;
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+
+// 单独提取处理代码块的函数
+function processCodeBlocks(container) {
+    const codeBlocks = container.querySelectorAll('pre code');
+    codeBlocks.forEach((codeBlock) => {
+        // 如果已经处理过，则跳过
+        if (codeBlock.parentNode.classList.contains('processed-code-block')) {
+            return;
+        }
+        
+        hljs.highlightElement(codeBlock);
+        
+        // 创建包装元素
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block processed-code-block';
+        wrapper.innerHTML = codeBlock.innerHTML;
+
+        // 添加按钮
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.className = 'code-block-buttons';
+
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-button';
+        copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+        copyButton.addEventListener('click', () => {
+            navigator.clipboard.writeText(codeBlock.textContent);
+            alert('代码已复制到剪贴板！');
+        });
+
+        const insertButton = document.createElement('button');
+        insertButton.className = 'insert-button';
+        insertButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+        insertButton.addEventListener('click', () => {
+            vscode.postMessage({ command: 'insertCode', code: codeBlock.textContent });
+        });
+
+        buttonsDiv.appendChild(copyButton);
+        buttonsDiv.appendChild(insertButton);
+        wrapper.appendChild(buttonsDiv);
+
+        // 替换原始代码块
+        codeBlock.parentNode.replaceWith(wrapper);
+    });
+}
+       
+        function showStatus(text) {
+        statusDiv.textContent = text;
+        statusDiv.style.display = 'block';
+    }
+
+    function hideStatus() {
+        statusDiv.style.display = 'none';
+    }
+
+    function typeWelcomeMessage(text, containerId) {
+        const container = document.getElementById(containerId);
+        container.textContent = ''; // 清空容器内容
+        let index = 0;
+
+        function type() {
+            if (index < text.length) {
+                container.textContent += text[index];
+                index++;
+                setTimeout(type, 50); // 每个字符间隔 50ms
+            }
+        }
+
+        type();
+    }
+
+    // 在插件加载时显示欢迎消息
+    window.addEventListener('DOMContentLoaded', () => {
+        typeWelcomeMessage('欢迎使用JoyCode！', 'welcome-message');
+
+        // 确保 #messages 容器有内容撑开布局
+    if (!messagesDiv.hasChildNodes()) {
+        const placeholder = document.createElement('div');
+        placeholder.style.minHeight = '50px'; // 设置占位高度
+        messagesDiv.appendChild(placeholder);
+    }
+    });
+    </script>
+</body>
+</html>

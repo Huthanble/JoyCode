@@ -31,12 +31,24 @@
     },
     "commands": [
       {
+        "command": "joycode.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "joycode.openChat",
+        "title": "打开聊天窗口"
+      },
+      {
         "command": "joycode.generateSuggestion",
-        "title": "Generate Code Suggestion"
+        "title": "手动触发自动补全功能"
       },
       {
         "command": "joycode.toggleAutoTrigger",
         "title": "JoyCode: 切换自动触发功能"
+      },
+      {
+        "command": "extension.commentToCode",
+        "title": "将注释转换为代码"
       }
     ],
     "keybindings": [
@@ -46,7 +58,18 @@
         "mac": "cmd+alt+.",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+  
+    "menus":{
+      "editor/context": [
+        {
+          "command": "extension.commentToCode",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
+    
   },
   "scripts": {
     "lint": "eslint .",
@@ -65,6 +88,6 @@
   },
   "dependencies": {
     "axios": "^0.27.2",
-    "openai": "^4.0.0"
+    "openai": "^4.90.0"
   }
 }
