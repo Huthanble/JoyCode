@@ -24,9 +24,10 @@
             flex-direction: column;
             justify-content: space-between;
             height: 100%;
-            max-width: 98%;
-            margin: auto;
+            width: 100%;
+            margin: 0;
             border: 1px solid transparent;
+            box-sizing: border-box;
             border-radius: 8px;
             background: transparent;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -34,12 +35,13 @@
         #messages {
             flex: 1;
             min-height: 100px; /* 确保有最小高度 */
-            min-width: 100%; /* 确保宽度撑满父容器 */
+            min-width: auto; /* 确保宽度撑满父容器 */
             padding: 15px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 10px;
+            box-sizing: border-box;
         }
         .message {
             display: flex;
@@ -208,15 +210,40 @@
         const input = document.getElementById('input');
         const sendButton = document.getElementById('send');
         const statusDiv=document.getElementById('status');
-                
         sendButton.addEventListener('click', sendMessage);
+
+        
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+
+            if (message.command === 'chatHistory') {
+                // 渲染聊天记录
+                message.history.forEach((msg) => {
+                    appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
+                });
+            }
+
+            if (message.command === 'response') {
+                hideStatus(); // 隐藏状态
+                appendMessage('ai', message.text, true); // 渲染 Markdown
+            }
+
+            sendButton.disabled = false; // 启用发送按钮
+            sendButton.style.cursor = 'pointer'; // 恢复鼠标样式
+            sendButton.style.opacity = '1'; // 恢复按钮透明度
+        
+            
+        });
+
         input.addEventListener('keyup', (event) => {
             if (event.key === 'Enter') {
                 sendMessage();
             }
         });
-
+        let isSending = false; // 用于防止重复发送消息
         function sendMessage() {
+            if (isSending) return; // 如果正在发送，则不再发送
+            isSending = true; // 设置为正在发送状态
             const text = input.value.trim();
             if (text) {
                 const welcomeMessage = document.getElementById('welcome-message');
@@ -228,16 +255,20 @@
                 vscode.postMessage({ command: 'askAI', text });
                 input.value = '';
                 showStatus('正在等待AI回复...'); // 显示状态
+
+                sendButton.disabled = true; // 禁用发送按钮
+                sendButton.style.cursor = 'not-allowed'; // 更改鼠标样式
+                sendButton.style.opacity = '0.5'; // 更改按钮透明度
+                
+               
+                
+                setTimeout(() => {
+                    isSending = false; // 重置为可以发送状态
+                }, 1000); // 1秒后重置状态
             }
         }
 
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            if (message.command === 'response') {
-                hideStatus(); // 隐藏状态
-                appendMessage('ai', message.text, true); // 渲染 Markdown
-            }
-        });
+        
         
         function appendMessage(sender, text, isMarkdown = false) {
             const messageDiv = document.createElement('div');
