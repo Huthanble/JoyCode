@@ -24,9 +24,10 @@
             flex-direction: column;
             justify-content: space-between;
             height: 100%;
-            max-width: 98%;
-            margin: auto;
+            width: 100%;
+            margin: 0;
             border: 1px solid transparent;
+            box-sizing: border-box;
             border-radius: 8px;
             background: transparent;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -34,12 +35,13 @@
         #messages {
             flex: 1;
             min-height: 100px; /* 确保有最小高度 */
-            min-width: 100%; /* 确保宽度撑满父容器 */
+            min-width: auto; /* 确保宽度撑满父容器 */
             padding: 15px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 10px;
+            box-sizing: border-box;
         }
         .message {
             display: flex;
@@ -208,15 +210,40 @@
         const input = document.getElementById('input');
         const sendButton = document.getElementById('send');
         const statusDiv=document.getElementById('status');
-                
         sendButton.addEventListener('click', sendMessage);
+
+        
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+
+            if (message.command === 'chatHistory') {
+                // 渲染聊天记录
+                message.history.forEach((msg) => {
+                    appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
+                });
+            }
+
+            if (message.command === 'response') {
+                hideStatus(); // 隐藏状态
+                appendMessage('ai', message.text, true); // 渲染 Markdown
+            }
+
+            sendButton.disabled = false; // 启用发送按钮
+            sendButton.style.cursor = 'pointer'; // 恢复鼠标样式
+            sendButton.style.opacity = '1'; // 恢复按钮透明度
+        
+            
+        });
+
         input.addEventListener('keyup', (event) => {
             if (event.key === 'Enter') {
                 sendMessage();
             }
         });
-
+        let isSending = false; // 用于防止重复发送消息
         function sendMessage() {
+            if (isSending) return; // 如果正在发送，则不再发送
+            isSending = true; // 设置为正在发送状态
             const text = input.value.trim();
             if (text) {
                 const welcomeMessage = document.getElementById('welcome-message');
@@ -228,85 +255,90 @@
                 vscode.postMessage({ command: 'askAI', text });
                 input.value = '';
                 showStatus('正在等待AI回复...'); // 显示状态
+
+                sendButton.disabled = true; // 禁用发送按钮
+                sendButton.style.cursor = 'not-allowed'; // 更改鼠标样式
+                sendButton.style.opacity = '0.5'; // 更改按钮透明度
+                
+               
+                
+                setTimeout(() => {
+                    isSending = false; // 重置为可以发送状态
+                }, 1000); // 1秒后重置状态
             }
         }
 
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            if (message.command === 'response') {
-                hideStatus(); // 隐藏状态
-                appendMessage('ai', message.text, true); // 渲染 Markdown
-            }
-        });
+        
+        
         function appendMessage(sender, text, isMarkdown = false) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
 
-    // 添加头像
-    const avatar = document.createElement('img');
-    avatar.src = sender === 'user' ? userAvatarUri : aiAvatarUri;
-    avatar.alt = sender === 'user' ? '用户头像' : 'AI头像';
-    avatar.className = 'avatar';
+            // 添加头像
+            const avatar = document.createElement('img');
+            avatar.src = sender === 'user' ? userAvatarUri : aiAvatarUri;
+            avatar.alt = sender === 'user' ? '用户头像' : 'AI头像';
+            avatar.className = 'avatar';
 
-    // 添加消息内容容器
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    
-    // 将头像和消息内容添加到消息容器
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
+            // 添加消息内容容器
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // 将头像和消息内容添加到消息容器
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
 
-    // 将消息容器添加到消息列表
-    messagesDiv.appendChild(messageDiv);
-    
-    // 如果是AI消息且需要逐字显示
-    if (sender === 'ai') {
-        let index = 0;
-        const speed = 20; // 控制显示速度（毫秒）
-        
-        // 创建临时元素用于逐步添加内容
-        const tempDiv = document.createElement('div');
-        
-        function typeWriter() {
-            if (index < text.length) {
-                // 添加下一个字符
-                tempDiv.textContent = text.substring(0, index + 1);
+            // 将消息容器添加到消息列表
+            messagesDiv.appendChild(messageDiv);
+            
+            // 如果是AI消息且需要逐字显示
+            if (sender === 'ai') {
+                let index = 0;
+                const speed = 20; // 控制显示速度（毫秒）
                 
+                // 创建临时元素用于逐步添加内容
+                const tempDiv = document.createElement('div');
+                
+                function typeWriter() {
+                    if (index < text.length) {
+                        // 添加下一个字符
+                        tempDiv.textContent = text.substring(0, index + 1);
+                        
+                        if (isMarkdown) {
+                            // 使用 marked.js 渲染 Markdown
+                            const htmlContent = marked.parse(tempDiv.textContent);
+                            contentDiv.innerHTML = htmlContent;
+                            
+                            // 实时处理代码块（即使未完全显示）
+                            processCodeBlocks(contentDiv);
+                        } else {
+                            contentDiv.textContent = tempDiv.textContent;
+                        }
+                        
+                        index++;
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        setTimeout(typeWriter, speed);
+                    } else {
+                        // 最终确保所有代码块都处理完毕
+                        if (isMarkdown) {
+                            processCodeBlocks(contentDiv);
+                        }
+                    }
+                }
+                
+                typeWriter();
+            } else {
+                // 用户消息直接显示
                 if (isMarkdown) {
-                    // 使用 marked.js 渲染 Markdown
-                    const htmlContent = marked.parse(tempDiv.textContent);
+                    const htmlContent = marked.parse(text);
                     contentDiv.innerHTML = htmlContent;
-                    
-                    // 实时处理代码块（即使未完全显示）
                     processCodeBlocks(contentDiv);
                 } else {
-                    contentDiv.textContent = tempDiv.textContent;
+                    contentDiv.textContent = text;
                 }
-                
-                index++;
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                setTimeout(typeWriter, speed);
-            } else {
-                // 最终确保所有代码块都处理完毕
-                if (isMarkdown) {
-                    processCodeBlocks(contentDiv);
-                }
             }
         }
-        
-        typeWriter();
-    } else {
-        // 用户消息直接显示
-        if (isMarkdown) {
-            const htmlContent = marked.parse(text);
-            contentDiv.innerHTML = htmlContent;
-            processCodeBlocks(contentDiv);
-        } else {
-            contentDiv.textContent = text;
-        }
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-}
 
 // 单独提取处理代码块的函数
 function processCodeBlocks(container) {
