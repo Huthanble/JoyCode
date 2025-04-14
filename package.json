@@ -26,6 +26,11 @@
           "type": "boolean",
           "default": true,
           "description": "启用自动触发代码补全。禁用后，只能通过快捷键(Alt+Ctrl+.)手动触发。"
+        },
+        "joycode.customPrompt": {
+          "type": "string",
+          "default": "用户提示词为空",
+          "description": "自定义代码补全提示词。"
         }
       }
     },
@@ -49,6 +54,10 @@
       {
         "command": "extension.commentToCode",
         "title": "将注释转换为代码"
+      },
+      {
+        "command": "joycode.editCustomPrompt",
+        "title": "JoyCode: 编辑代码补全提示词"
       }
     ],
     "keybindings": [

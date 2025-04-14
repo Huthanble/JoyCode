@@ -62,11 +62,23 @@ async function getSuggestion(document, position) {
   const cursorOffset = document.offsetAt(position);
   const prompt = fullText.slice(0, cursorOffset);
   const suffix = fullText.slice(cursorOffset);
-
+  
+  // 获取用户自定义提示词
+  const customPrompt = getCustomPrompt(document);
   try {
+    // 构建包含自定义提示词的上下文
+    let promptWithContext = '';
+
+    promptWithContext = 
+        `###这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:###\n${customPrompt}\n\n` +
+        `###代码上下文###\n` +
+        `文件: ${document.fileName}\n` +
+        `语言: ${document.languageId}\n` +
+        `前缀代码:\n${prompt}\n\n`;
+    
     const response = await openai.completions.create({
       model: 'deepseek-chat',
-      prompt: prompt,
+      prompt: promptWithContext,
       suffix: suffix,
       max_tokens: 200,
       temperature: 0.5,
@@ -77,6 +89,17 @@ async function getSuggestion(document, position) {
     console.error('调用 DeepSeek API 出错:', error);
     return null;
   }
+}
+
+// 获取用户自定义提示词，应用模板变量
+function getCustomPrompt(document) {
+  const config = vscode.workspace.getConfiguration('joycode');
+  const promptTemplate = vscode.workspace.getConfiguration('joycode').get('customPrompt', "无");
+  
+  if (!promptTemplate) return "无";
+  
+  // 替换模板变量
+  return promptTemplate;
 }
 
 /**
@@ -186,6 +209,31 @@ function activateCodeCompletion(context) {
   context.subscriptions.push(
     vscode.window.onDidChangeVisibleTextEditors(() => {
       hideLoadingIndicator();
+    })
+  );
+
+  // 注册编辑提示词命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand('joycode.editCustomPrompt', async () => {
+      const config = vscode.workspace.getConfiguration('joycode');
+      const currentPrompt = config.get('customPrompt', '');
+      
+      const newPrompt = await vscode.window.showInputBox({
+        value: currentPrompt,
+        prompt: '编辑代码补全提示词',
+        placeHolder: '例如：请提供高质量的{{language}}代码补全，保持代码风格一致',
+        validateInput: text => {
+          if (text.length > 500) {
+            return '提示词过长，请保持在500字符以内';
+          }
+          return null;
+        }
+      });
+      
+      if (newPrompt !== undefined) { // 用户没有取消
+        await config.update('customPrompt', newPrompt, true);
+        vscode.window.showInformationMessage('代码补全提示词已更新');
+      }
     })
   );
 }
