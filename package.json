@@ -31,6 +31,21 @@
           "type": "string",
           "default": "用户提示词为空",
           "description": "自定义代码补全提示词。"
+        },
+        "joycode.enableRelatedFiles": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用关联文件上下文。开启后，会自动分析导入语句并包含相关文件内容。"
+        },
+        "joycode.maxRelatedFileSize": {
+          "type": "number",
+          "default": 50000,
+          "description": "单个关联文件的最大字符数限制。超过此限制的文件内容将被截断。"
+        },
+        "joycode.maxTotalRelatedFilesSize": {
+          "type": "number",
+          "default": 50000,
+          "description": "所有关联文件内容的总字符数限制。"
         }
       }
     },
@@ -58,6 +73,10 @@
       {
         "command": "joycode.editCustomPrompt",
         "title": "JoyCode: 编辑代码补全提示词"
+      },
+      {
+        "command": "joycode.toggleRelatedFiles",
+        "title": "JoyCode: 切换关联文件分析功能"
       }
     ],
     "keybindings": [

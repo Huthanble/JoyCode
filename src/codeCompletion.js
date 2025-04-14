@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const { OpenAI } = require('openai');
+const path = require('path');
 
 // 配置 DeepSeek API
 const openai = new OpenAI({
@@ -65,17 +66,53 @@ async function getSuggestion(document, position) {
   
   // 获取用户自定义提示词
   const customPrompt = getCustomPrompt(document);
+
+  // 获取关联文件内容
+  const relatedFiles = await getRelatedFilesContent(document);
+
+  // 如果文件大小超出限制，显示提示
+  if (relatedFiles.truncated) {
+    vscode.window.showWarningMessage(
+      "相关文件长度过长，相关文件内容会被截取，请考虑是否要关闭相关文件功能", 
+      "关闭相关文件功能", 
+      "继续"
+    ).then(selection => {
+      if (selection === "关闭相关文件功能") {
+        vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', false, true);
+        vscode.window.showInformationMessage("已关闭相关文件功能");
+      }
+    });
+  }
+
   try {
     // 构建包含自定义提示词的上下文
     let promptWithContext = '';
 
     promptWithContext = 
-        `###这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:###\n${customPrompt}\n\n` +
+        `###这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:###\n${customPrompt}\n\n`;
+
+    // 添加关联文件内容
+    if (relatedFiles.files.length > 0) {
+      promptWithContext += "###这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：###\n";
+      
+      for (const file of relatedFiles.files) {
+        const fileName = path.basename(file.path);
+        promptWithContext += `文件: ${fileName}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+      }
+      
+      if (relatedFiles.truncated) {
+        promptWithContext += `注意: ${relatedFiles.message}\n\n`;
+      }
+    }
+
+    promptWithContext +=
         `###代码上下文###\n` +
         `文件: ${document.fileName}\n` +
         `语言: ${document.languageId}\n` +
         `前缀代码:\n${prompt}\n\n`;
     
+    console.log("生成的前文（提示词+关联文件+当前代码）：\n",promptWithContext);
+
     const response = await openai.completions.create({
       model: 'deepseek-chat',
       prompt: promptWithContext,
@@ -93,12 +130,10 @@ async function getSuggestion(document, position) {
 
 // 获取用户自定义提示词，应用模板变量
 function getCustomPrompt(document) {
-  const config = vscode.workspace.getConfiguration('joycode');
   const promptTemplate = vscode.workspace.getConfiguration('joycode').get('customPrompt', "无");
   
   if (!promptTemplate) return "无";
   
-  // 替换模板变量
   return promptTemplate;
 }
 
@@ -108,6 +143,237 @@ function getCustomPrompt(document) {
  */
 function isAutoTriggerEnabled() {
   return vscode.workspace.getConfiguration('joycode').get('enableAutoTrigger', true);
+}
+
+/**
+ * 检查是否启用关联文件功能
+ */
+function isRelatedFilesEnabled() {
+  return vscode.workspace.getConfiguration('joycode').get('enableRelatedFiles', false);
+}
+
+/**
+ * 提取文件中的导入语句并解析出文件路径
+ * @param {string} content - 文件内容
+ * @param {string} language - 语言类型
+ * @param {string} currentFilePath - 当前文件路径
+ * @returns {string[]} - 关联文件路径数组
+ */
+function extractImportPaths(content, language, currentFilePath) {
+  const importPaths = [];
+  const currentDir = path.dirname(currentFilePath);
+  
+  // 不同语言的导入语句正则
+  const patterns = {
+    javascript: [
+      /import\s+.*\s+from\s+['"](\.\/|\.\.\/|\/)[^'"]+['"]/g,  // ES6 import
+      /require\(\s*['"](\.\/|\.\.\/|\/)[^'"]+['"]\s*\)/g        // CommonJS require
+    ],
+    typescript: [
+      /import\s+.*\s+from\s+['"](\.\/|\.\.\/|\/)[^'"]+['"]/g,
+      /import\s*\(\s*['"](\.\/|\.\.\/|\/)[^'"]+['"]\s*\)/g
+    ],
+    python: [
+      /from\s+(\.+\w+|\w+)(\.\w+)*\s+import/g,
+      /import\s+(\w+)(\.\w+)*/g
+    ],
+    java: [
+      /import\s+([a-zA-Z0-9_$.]+\*?);/g
+    ],
+    'c': [
+      /#include\s+["<](\.\/|\.\.\/)?([^">]+)[">]/g
+    ],
+    'cpp': [
+      /#include\s+["<](\.\/|\.\.\/)?([^">]+)[">]/g
+    ]
+  };
+  
+  // 获取适用于当前语言的模式
+  const languagePatterns = patterns[language] || [];
+  
+  // 遍历所有模式进行匹配
+  for (const pattern of languagePatterns) {
+    const matches = content.match(pattern) || [];
+    
+    for (const match of matches) {
+      let importPath = '';
+      
+      // 根据不同语言提取导入路径
+      if (language === 'javascript' || language === 'typescript') {
+        // 提取 'from "path"' 或 'require("path")' 中的路径
+        const pathMatch = match.match(/['"]([^'"]+)['"]/);
+        if (pathMatch && pathMatch[1].startsWith('.')) {
+          importPath = path.resolve(currentDir, pathMatch[1]);
+        }
+      } else if (language === 'python') {
+        // 处理 from ... import ... 或 import ...
+        let modulePath = '';
+        if (match.startsWith('from')) {
+          const fromMatch = match.match(/from\s+([^\s]+)/);
+          if (fromMatch) modulePath = fromMatch[1];
+        } else {
+          const importMatch = match.match(/import\s+([^\s]+)/);
+          if (importMatch) modulePath = importMatch[1];
+        }
+        
+        // 处理相对导入
+        if (modulePath.startsWith('.')) {
+          importPath = path.resolve(currentDir, modulePath.replace(/\./g, '/') + '.py');
+        }
+      } else if (language === 'java') {
+        // Java 导入处理
+        const packageMatch = match.match(/import\s+([^;]+);/);
+        if (packageMatch) {
+          const packagePath = packageMatch[1].replace(/\./g, '/');
+          // 搜索项目中的Java文件
+          importPath = packagePath + '.java';
+        }
+      } else if (language === 'c' || language === 'cpp') {
+        // 处理 #include "file.h" 或 #include <file.h>
+        const includeMatch = match.match(/["<]([^">]+)[">]/);
+        if (includeMatch) {
+          const includePath = includeMatch[1];
+          if (includePath.startsWith('./') || includePath.startsWith('../')) {
+            importPath = path.resolve(currentDir, includePath);
+          } else {
+            // 本地头文件，尝试在当前目录和项目中查找
+            importPath = includePath;
+          }
+        }
+      }
+      
+      if (importPath && !importPaths.includes(importPath)) {
+        importPaths.push(importPath);
+      }
+    }
+  }
+  
+  return importPaths;
+}
+
+/**
+ * 在项目中查找文件
+ * @param {string} filePath - 文件路径或模式
+ * @returns {Promise<string[]>} - 找到的文件路径
+ */
+async function findFilesInProject(filePath) {
+  // 如果是绝对路径，直接检查文件是否存在
+  if (path.isAbsolute(filePath)) {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+      return [filePath];
+    } catch (error) {
+      console.log("\n文件不存在：",filePath);
+      // 文件不存在
+      return [];
+    }
+  }
+  
+  // 对于相对路径或模块名，使用glob模式搜索
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) return [];
+  
+  // 构建搜索模式
+  const fileName = path.basename(filePath);
+  const fileExt = path.extname(filePath) || '.*';
+  const searchPattern = fileName === filePath 
+    ? `**/${fileName}${fileExt === '.*' ? fileExt : ''}`
+    : `**/${filePath}`;
+  
+  try {
+    const files = await vscode.workspace.findFiles(searchPattern, '**/node_modules/**');
+    return files.map(file => file.fsPath);
+  } catch (error) {
+    console.error('搜索项目文件失败:', error);
+    return [];
+  }
+}
+
+/**
+ * 读取文件内容
+ * @param {string} filePath - 文件路径
+ * @returns {Promise<string>} - 文件内容
+ */
+async function readFileContent(filePath) {
+  try {
+    const content = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+    return Buffer.from(content).toString('utf8');
+  } catch (error) {
+    console.error(`读取文件失败 ${filePath}:`, error);
+    return '';
+  }
+}
+
+/**
+ * 获取关联文件的内容
+ * @param {vscode.TextDocument} document - 当前文档
+ * @returns {Promise<Object>} - 包含关联文件内容的对象
+ */
+async function getRelatedFilesContent(document) {
+  if (!isRelatedFilesEnabled()) return { files: [] };
+  
+  const maxFileSize = vscode.workspace.getConfiguration('joycode').get('maxRelatedFileSize', 50000);
+  const maxTotalSize = vscode.workspace.getConfiguration('joycode').get('maxTotalRelatedFilesSize', 50000);
+  
+  const content = document.getText();
+  const language = document.languageId;
+  const filePath = document.fileName;
+  
+  // 提取导入路径
+  const importPaths = extractImportPaths(content, language, filePath);
+  
+  // 查找文件
+  const relatedFiles = [];
+  let totalSize = 0;
+  const processedPaths = new Set(); // 防止循环引用
+  
+  for (const importPath of importPaths) {
+
+    console.log("\n找到的文件路径：",importPath);
+
+    if (processedPaths.has(importPath)) continue;
+    processedPaths.add(importPath);
+    
+    const files = await findFilesInProject(importPath);
+    
+    for (const file of files) {
+      if (file === filePath) continue; // 跳过自引用
+      
+      let fileContent = await readFileContent(file);
+      
+      // 检查文件大小
+      if (fileContent.length > maxFileSize) {
+        fileContent = fileContent.substring(0, maxFileSize) + 
+          `\n// ... 文件过大，已截断 (文件长度：${fileContent.length} > 文件可读取最大长度：${maxFileSize} 字符)`;
+      }
+      
+      // 检查总大小限制
+      if (totalSize + fileContent.length > maxTotalSize) {
+        if (relatedFiles.length === 0) {
+          // 至少包含一个文件
+          relatedFiles.push({
+            path: file,
+            content: fileContent.substring(0, maxTotalSize) + 
+              `\n// ... 超出总大小限制 (${maxTotalSize} 字符)`
+          });
+        }
+        return { 
+          files: relatedFiles,
+          truncated: true,
+          message: `相关文件总大小超过限制 (${maxTotalSize} 字符)，因此只截取部分内容`
+        };
+      }
+      
+      relatedFiles.push({
+        path: file,
+        content: fileContent
+      });
+      
+      totalSize += fileContent.length;
+    }
+  }
+  
+  return { files: relatedFiles };
 }
 
 /**
@@ -209,6 +475,15 @@ function activateCodeCompletion(context) {
   context.subscriptions.push(
     vscode.window.onDidChangeVisibleTextEditors(() => {
       hideLoadingIndicator();
+    })
+  );
+
+  // 注册关联文件功能的开关命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand('joycode.toggleRelatedFiles', async () => {
+      const currentValue = isRelatedFilesEnabled();
+      await vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', !currentValue, true);
+      vscode.window.showInformationMessage(`关联文件功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
 
