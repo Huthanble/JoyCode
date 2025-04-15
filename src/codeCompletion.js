@@ -1,6 +1,8 @@
 const vscode = require('vscode');
 const { OpenAI } = require('openai');
 const path = require('path');
+const { execSync } = require('child_process');
+const fs = require('fs');
 
 // 配置 DeepSeek API
 const openai = new OpenAI({
@@ -70,6 +72,9 @@ async function getSuggestion(document, position) {
   // 获取关联文件内容
   const relatedFiles = await getRelatedFilesContent(document);
 
+   // 获取当前文件的Git blame信息
+  const blameHistory = await getFileBlameHistory(document);
+
   // 如果文件大小超出限制，显示提示
   if (relatedFiles.truncated) {
     vscode.window.showWarningMessage(
@@ -91,7 +96,23 @@ async function getSuggestion(document, position) {
     promptWithContext = 
         `###这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:###\n${customPrompt}\n\n`;
 
-    // 添加关联文件内容
+    // 添加Git blame信息（正确性尚未测试）
+    if (blameHistory.blameLines && blameHistory.blameLines.length > 0) {
+      promptWithContext += "###这一部分内容是当前文件在用户的github仓库中的变更历史:###\n";
+      promptWithContext += `文件: ${path.basename(document.fileName)}\n`;
+      
+      for (const line of blameHistory.blameLines) {
+        promptWithContext += `${line}\n`;
+      }
+      
+      if (blameHistory.truncated) {
+        promptWithContext += `注意: ${blameHistory.message}\n`;
+      }
+      
+      promptWithContext += "\n";
+    }
+
+    // 添加关联文件内容（这部分的代码正确性没有测试，如果有问题直接注释掉）
     if (relatedFiles.files.length > 0) {
       promptWithContext += "###这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：###\n";
       
@@ -111,7 +132,7 @@ async function getSuggestion(document, position) {
         `语言: ${document.languageId}\n` +
         `前缀代码:\n${prompt}\n\n`;
     
-    console.log("生成的前文（提示词+关联文件+当前代码）：\n",promptWithContext);
+    console.log("生成的前文（提示词+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
 
     const response = await openai.completions.create({
       model: 'deepseek-chat',
@@ -135,6 +156,118 @@ function getCustomPrompt(document) {
   if (!promptTemplate) return "无";
   
   return promptTemplate;
+}
+
+/**
+ * 检查是否启用Git blame功能
+ */
+function isGitBlameEnabled() {
+  return vscode.workspace.getConfiguration('joycode').get('enableGitBlame', false);
+}
+
+/**
+ * 检查当前文件是否在Git仓库中
+ * @param {string} filePath - 文件路径
+ * @returns {boolean} 是否在Git仓库中
+ */
+function isFileInGitRepository(filePath) {
+  try {
+    if (!filePath) return false;
+    
+    const dirPath = path.dirname(filePath);
+    let currentDir = dirPath;
+    
+    // 向上查找.git目录，检查是否在Git仓库中
+    while (currentDir && currentDir !== path.dirname(currentDir)) {
+      const gitDir = path.join(currentDir, '.git');
+      if (fs.existsSync(gitDir)) {
+        return true;
+      }
+      currentDir = path.dirname(currentDir);
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('检查文件是否在Git仓库中失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 获取当前文件的Git blame信息
+ * @param {vscode.TextDocument} document - 当前文档
+ * @returns {Promise<Object>} 包含blame信息的对象
+ */
+async function getFileBlameHistory(document) {
+  if (!isGitBlameEnabled() || !document) {
+    return { blameLines: [] };
+  }
+  
+  const filePath = document.fileName;
+  
+  if (!filePath || !isFileInGitRepository(filePath)) {
+    return { blameLines: [] };
+  }
+  
+  const maxBlameLines = vscode.workspace.getConfiguration('joycode').get('maxBlameLines', 50);
+  const maxBlameSize = vscode.workspace.getConfiguration('joycode').get('maxBlameHistorySize', 2000);
+  
+  try {
+    const dirPath = path.dirname(filePath);
+    const relativePath = path.relative(dirPath, filePath);
+    
+    // 使用git blame获取文件变更历史
+    // 格式: [hash] ([author] [date] [line]) [content]
+    const command = `git -C "${dirPath}" blame -n -w --date=short "${relativePath}"`;
+    const output = execSync(command).toString();
+    
+    // 解析blame输出
+    const blameLines = [];
+    let totalSize = 0;
+    let truncated = false;
+    
+    const lines = output.split('\n');
+    
+    // 只保留指定数量的行
+    const limitedLines = lines.length > maxBlameLines 
+      ? lines.slice(0, maxBlameLines) 
+      : lines;
+    
+    for (const line of limitedLines) {
+      if (line.trim() === '') continue;
+
+      console.log("提取到的文件更改历史：",line);
+      console.log("\n");
+      
+      // 如果这行太长，截断它
+      if (line.length > maxBlameSize && blameLines.length === 0) {
+        blameLines.push(line.substring(0, maxBlameSize) + '... (truncated)');
+        truncated = true;
+        break;
+      }
+      
+      // 检查总大小限制
+      if (totalSize + line.length > maxBlameSize) {
+        truncated = true;
+        break;
+      }
+      
+      blameLines.push(line);
+      totalSize += line.length;
+    }
+    
+    return {
+      blameLines,
+      truncated,
+      message: truncated ? "变更历史因超出长度限制而被截断" : ""
+    };
+  } catch (error) {
+    console.error('获取Git blame信息失败:', error);
+    return { 
+      blameLines: [],
+      error: `获取Git blame信息失败: ${error.message}`
+    };
+  }
 }
 
 /**
@@ -478,6 +611,14 @@ function activateCodeCompletion(context) {
     })
   );
 
+  // 注册Git blame功能的开关命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand('joycode.toggleGitBlame', async () => {
+      const currentValue = isGitBlameEnabled();
+      await vscode.workspace.getConfiguration('joycode').update('enableGitBlame', !currentValue, true);
+      vscode.window.showInformationMessage(`Git变更历史功能已${!currentValue ? '启用' : '禁用'}`);
+    })
+  );
   // 注册关联文件功能的开关命令
   context.subscriptions.push(
     vscode.commands.registerCommand('joycode.toggleRelatedFiles', async () => {
