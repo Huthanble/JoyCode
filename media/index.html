@@ -206,18 +206,29 @@
 
     <script>
         const vscode = acquireVsCodeApi();
-        const messagesDiv = document.getElementById('messages');
+        const messagesDiv = document.getElementById('messages');//在html中通过id查找元素
         const input = document.getElementById('input');
         const sendButton = document.getElementById('send');
-        const statusDiv=document.getElementById('status');
         sendButton.addEventListener('click', sendMessage);
+        const statusDiv=document.getElementById('status');
+        
+        // 在插件加载时显示欢迎消息
+        window.addEventListener('DOMContentLoaded', () => {
+            typeWelcomeMessage('欢迎使用JoyCode！', 'welcome-message');
 
+            // 确保 #messages 容器有内容撑开布局
+        // if (!messagesDiv.hasChildNodes()) {
+        //     const placeholder = document.createElement('div');
+        //     placeholder.style.minHeight = '50px'; // 设置占位高度
+        //     messagesDiv.appendChild(placeholder);
+        // }
+        });
         
         window.addEventListener('message', (event) => {
             const message = event.data;
 
             if (message.command === 'chatHistory') {
-                // 渲染聊天记录
+                // 渲染聊天记录，目前还没实现
                 message.history.forEach((msg) => {
                     appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
                 });
@@ -234,7 +245,7 @@
         
             
         });
-
+        //给输入框绑定监听，这样只有当用户在输入框中按下回车时，才会执行 sendMessage()
         input.addEventListener('keyup', (event) => {
             if (event.key === 'Enter') {
                 sendMessage();
@@ -260,8 +271,6 @@
                 sendButton.style.cursor = 'not-allowed'; // 更改鼠标样式
                 sendButton.style.opacity = '0.5'; // 更改按钮透明度
                 
-               
-                
                 setTimeout(() => {
                     isSending = false; // 重置为可以发送状态
                 }, 1000); // 1秒后重置状态
@@ -269,7 +278,7 @@
         }
 
         
-        
+        //展示消息
         function appendMessage(sender, text, isMarkdown = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
@@ -409,17 +418,6 @@ function processCodeBlocks(container) {
         type();
     }
 
-    // 在插件加载时显示欢迎消息
-    window.addEventListener('DOMContentLoaded', () => {
-        typeWelcomeMessage('欢迎使用JoyCode！', 'welcome-message');
-
-        // 确保 #messages 容器有内容撑开布局
-    if (!messagesDiv.hasChildNodes()) {
-        const placeholder = document.createElement('div');
-        placeholder.style.minHeight = '50px'; // 设置占位高度
-        messagesDiv.appendChild(placeholder);
-    }
-    });
     </script>
 </body>
 </html>
