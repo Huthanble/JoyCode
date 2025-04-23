@@ -7,39 +7,52 @@ function activateAiChatCodeGen(context) {
     // 在创建 Webview 前先获取并缓存编辑器状态
     let fileContent = '';
     let filePath = '';
-
+    let lastActiveEditor = vscode.window.activeTextEditor; // 缓存当前活动编辑器
      // 定义一个函数来更新当前活动编辑器的内容
      function updateActiveEditorInfo() {
-        const editor = vscode.window.activeTextEditor;
+        const editor = lastActiveEditor||vscode.window.activeTextEditor;
         if (editor) {
             const document = editor.document;
             fileContent = document.getText(); // 获取文件内容
             filePath = document.uri.fsPath; // 获取文件路径
+            lastActiveEditor = editor; // 更新缓存的活动编辑器
             console.log("活动编辑器已更新:");
             console.log("文件路径:", filePath);
             console.log("文件内容:", fileContent);
-        } else {
-            fileContent = '当前没有活动的编辑器，无法读取文件内容。';
-            filePath = '';
-            console.log("没有活动的编辑器。");
+        }else {
+            // 如果没有活动编辑器，尝试从已打开的文档中获取内容
+            const documents = vscode.workspace.textDocuments;
+            if (documents.length > 0) {
+                const document = documents[0]; // 获取第一个已打开的文档
+                fileContent = document.getText();
+                filePath = document.uri.fsPath;
+                console.log("从已打开的文档中获取内容:");
+                console.log("文件路径:", filePath);
+                console.log("文件内容:", fileContent);
+            } else {
+                fileContent = '当前没有活动的编辑器，无法读取文件内容。';
+                filePath = '';
+                console.log("没有活动的编辑器，也没有已打开的文档。");
+            }
         }
     }
 
     // 初始化时更新活动编辑器信息
     updateActiveEditorInfo();
 
-    // 监听编辑器切换事件
+
+    // 监听编辑器切换事件，编辑器切换时又调用一次更新编辑器信息
     vscode.window.onDidChangeActiveTextEditor(() => {
         updateActiveEditorInfo();
     });
 
     const panel = vscode.window.createWebviewPanel(
-        'chatPanel',
-        'AI Chat',
-        vscode.ViewColumn.Beside,
+        'chatPanel',//类型标识符，用于区分不同的webview面板
+        'AI Chat',//面板标题
+        vscode.ViewColumn.Beside,//面板显示位置
         {
             enableScripts: true,
-            retainContextWhenHidden: true,
+            retainContextWhenHidden: true,//保持上下文
         }
     );
     // 生成头像路径
@@ -58,7 +71,6 @@ function activateAiChatCodeGen(context) {
         vscode.window.showErrorMessage("无法加载聊天窗口的 HTML 文件。");
         return;
     }
-
     // 将头像路径注入到 HTML 中
     panel.webview.html = `
         <script>
@@ -67,8 +79,8 @@ function activateAiChatCodeGen(context) {
         </script>
         ${htmlContent}
     `;
-    let chatHistory = [];
 
+    let chatHistory = []; // 初始化聊天历史记录
     // 添加消息到历史记录
     function addToChatHistory(role, content) {
         chatHistory.push({
@@ -76,7 +88,7 @@ function activateAiChatCodeGen(context) {
             content: String(content)
         });
         
-        // 限制历史记录长度
+        // 限制历史记录长度，只保留最近10条
         if (chatHistory.length > 10) {
             chatHistory = chatHistory.slice(-10);
         }
@@ -97,7 +109,7 @@ function activateAiChatCodeGen(context) {
                 const response = await openai.chat.completions.create({
                     model: "deepseek-chat",
                     messages: [
-                    { role: "system", content: `当前文件路径: ${filePath}\n文件内容:\n${fileContent}` },
+                    { role: "system", content: `当前文件路径: ${filePath}\n文件内容:\n${fileContent},你是代码助手，请阅读文件内容并回答问题。` },
                     ...chatHistory.map(msg => ({
                         role: msg.role,
                         content: msg.content
