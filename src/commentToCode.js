@@ -1,11 +1,30 @@
 const vscode = require('vscode');
 const { openai } = require('./openaiClient');
+const { detectLanguage, runCode } = require('./tools');
 
+async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    const result = await runCode(lang, code);
+    if (result.success) return { success: true, code, output: result.message };
 
-const { detectLanguage, retryWithFeedback } = require('./tools');
+    const feedbackPrompt = `你根据以下注释生成了这段代码：\n\n注释: ${userKeywords}\n\n代码：\n\n\`\`\`${lang}\n${code}\n\`\`\`\n\n运行时报错如下：\n${result.message}\n\n请只输出修复后的完整代码（无额外解释）`;
 
-async function handleGeneratedCode(userKeywords, generatedCode) {
-  const lang = detectLanguage(generatedCode);
+    const response = await openai.completions.create({
+      model: 'deepseek-chat',
+      prompt: feedbackPrompt,
+      max_tokens: 1500
+    });
+
+    const newCode = response.choices[0]?.text.trim();
+    code = newCode;
+    attempt++;
+  }
+  return { success: false, code, output: '多次优化失败，请手动检查。' };
+}
+
+async function handleGeneratedCode(userKeywords, generatedCode, languageId) {
+  const lang = detectLanguage(generatedCode, languageId);
   const result = await retryWithFeedback(userKeywords, generatedCode, lang);
 
   if (result.success) {
@@ -27,10 +46,8 @@ async function generateCodeFromComment() {
       return;
     }
 
-    // 提取初始关键词
     const initialKeywords = selectedText.replace('//', '').trim();
 
-    // 提供输入框让用户修改关键词
     const userKeywords = await vscode.window.showInputBox({
       prompt: '请修改或确认关键词以生成代码',
       value: initialKeywords
@@ -40,7 +57,6 @@ async function generateCodeFromComment() {
       vscode.window.showErrorMessage('关键词不能为空');
       return;
     }
-
 
     const languageId = editor.document.languageId;
     const prompt = `请使用${languageId}语言，根据这个注释生成代码: ${userKeywords}`;
@@ -63,7 +79,7 @@ async function generateCodeFromComment() {
           const generatedCode = response.choices[0]?.text.trim();
           if (generatedCode) {
             editor.edit(editBuilder => editBuilder.insert(new vscode.Position(position.line + 1, 0), `${generatedCode}\n`));
-            handleGeneratedCode(userKeywords, generatedCode);
+            handleGeneratedCode(userKeywords, generatedCode, languageId);
           }
         } catch (error) {
           vscode.window.showErrorMessage('生成代码失败，请检查 API 设置。');
@@ -82,6 +98,6 @@ function activateCommentToCode(context) {
 function deactivateCommentToCode() {}
 
 module.exports = { 
-    activateCommentToCode,
-    deactivateCommentToCode
+  activateCommentToCode,
+  deactivateCommentToCode
 };
