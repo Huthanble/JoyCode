@@ -1,8 +1,6 @@
-# joycode README
+# navicode README
 
-This is the README for your extension "joycode". After writing up a brief description, we recommend including the following sections.
-
-## How to use
+## 介绍
 
 1.首先安装对应环境
     npm install
@@ -17,7 +15,7 @@ This is the README for your extension "joycode". After writing up a brief descri
 
 ## Structure
 
-📂 JoyCode
+📂 navicode
 ├── 📁 src
 │   ├── codeCompletion.js        # 代码补全  
 │   ├── aiChatCodeGen.js         # AI 对话生成代码  
@@ -50,7 +48,7 @@ This is the README for your extension "joycode". After writing up a brief descri
 - 在**自动补全**的状态下，当用户停止输入文本一段时间后，插件会根据用户编写的上下文自动补全一些代码，以虚影的方式呈现在文本中
 - 在**手动补全**的状态下，插件不会自动地输出建议，而是需要用户按下`alt+ctrl+.`的快捷键之后，插件会在光标处显示 `代码生成中...`的提示，然后才会根据上下文进行补全
 - 插件会在光标处生成补全建议的虚影，用户可以按下`Tab`键将生成的建议插入文本中
-- 按下ctrl+shift+P，在弹出的文本框中输入*Joycode*即可找到切换自动补全与手动补全的开关
+- 按下ctrl+shift+P，在弹出的文本框中输入*navicode*即可找到切换自动补全与手动补全的开关
 
 ## 函数介绍
 
@@ -115,13 +113,13 @@ This is the README for your extension "joycode". After writing up a brief descri
 ### 4. isAutoTriggerEnabled()
 
 #### 描述
-**描述：** 此函数从 VSCode 工作区配置中读取 `joycode.enableAutoTrigger` 配置项，判断是否启用了自动触发内联补全功能。
+**描述：** 此函数从 VSCode 工作区配置中读取 `navicode.enableAutoTrigger` 配置项，判断是否启用了自动触发内联补全功能。
 
 #### 参数
 无参数
 
 ##### 主要操作
-1. 使用 `vscode.workspace.getConfiguration('joycode')` 获取配置。  
+1. 使用 `vscode.workspace.getConfiguration('navicode')` 获取配置。  
 2. 读取 `enableAutoTrigger` 的值，默认值为 `true`。
 
 #### 返回值
@@ -141,10 +139,10 @@ This is the README for your extension "joycode". After writing up a brief descri
   *插件的上下文对象，用于注册命令和事件监听。*
 
 #### 主要操作
-1. **配置监听：** 注册监听器以监控 `joycode.enableAutoTrigger` 配置项的变更。  
+1. **配置监听：** 注册监听器以监控 `navicode.enableAutoTrigger` 配置项的变更。  
 2. **命令注册：**  
-   - 注册 `joycode.generateSuggestion` 命令，通过快捷键（如 `Alt+Ctrl+.`）触发内联补全，并在触发时显示加载提示。  
-   - 注册 `joycode.toggleAutoTrigger` 命令，用于切换自动触发功能，并通过通知显示当前状态。  
+   - 注册 `navicode.generateSuggestion` 命令，通过快捷键（如 `Alt+Ctrl+.`）触发内联补全，并在触发时显示加载提示。  
+   - 注册 `navicode.toggleAutoTrigger` 命令，用于切换自动触发功能，并通过通知显示当前状态。  
 3. **内联补全提供程序：**  
    - 注册内联补全提供程序，仅针对 `javascript`、`python`、`java`、`c`、`cpp` 等语言。  
    - 根据 `isAutoTriggerEnabled()` 和 `isManuallyTriggered` 状态，决定是否提供建议。  
@@ -278,65 +276,3 @@ This is the README for your extension "joycode". After writing up a brief descri
 ---
 
 
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
