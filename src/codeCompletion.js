@@ -83,7 +83,7 @@ async function getSuggestion(document, position) {
       "继续"
     ).then(selection => {
       if (selection === "关闭相关文件功能") {
-        vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', false, true);
+        vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', false, true);
         vscode.window.showInformationMessage("已关闭相关文件功能");
       }
     });
@@ -151,7 +151,7 @@ async function getSuggestion(document, position) {
 
 // 获取用户自定义提示词，应用模板变量
 function getCustomPrompt(document) {
-  const promptTemplate = vscode.workspace.getConfiguration('joycode').get('customPrompt', "无");
+  const promptTemplate = vscode.workspace.getConfiguration('navicode').get('customPrompt', "无");
   
   if (!promptTemplate) return "无";
   
@@ -162,7 +162,7 @@ function getCustomPrompt(document) {
  * 检查是否启用Git blame功能
  */
 function isGitBlameEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableGitBlame', false);
+  return vscode.workspace.getConfiguration('navicode').get('enableGitBlame', false);
 }
 
 /**
@@ -209,8 +209,8 @@ async function getFileBlameHistory(document) {
     return { blameLines: [] };
   }
   
-  const maxBlameLines = vscode.workspace.getConfiguration('joycode').get('maxBlameLines', 50);
-  const maxBlameSize = vscode.workspace.getConfiguration('joycode').get('maxBlameHistorySize', 2000);
+  const maxBlameLines = vscode.workspace.getConfiguration('navicode').get('maxBlameLines', 50);
+  const maxBlameSize = vscode.workspace.getConfiguration('navicode').get('maxBlameHistorySize', 2000);
   
   try {
     const dirPath = path.dirname(filePath);
@@ -275,14 +275,14 @@ async function getFileBlameHistory(document) {
  * @returns {boolean} - 是否启用自动触发
  */
 function isAutoTriggerEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableAutoTrigger', true);
+  return vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true);
 }
 
 /**
  * 检查是否启用关联文件功能
  */
 function isRelatedFilesEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableRelatedFiles', false);
+  return vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', false);
 }
 
 /**
@@ -445,8 +445,8 @@ async function readFileContent(filePath) {
 async function getRelatedFilesContent(document) {
   if (!isRelatedFilesEnabled()) return { files: [] };
   
-  const maxFileSize = vscode.workspace.getConfiguration('joycode').get('maxRelatedFileSize', 50000);
-  const maxTotalSize = vscode.workspace.getConfiguration('joycode').get('maxTotalRelatedFilesSize', 50000);
+  const maxFileSize = vscode.workspace.getConfiguration('navicode').get('maxRelatedFileSize', 50000);
+  const maxTotalSize = vscode.workspace.getConfiguration('navicode').get('maxTotalRelatedFilesSize', 50000);
   
   const content = document.getText();
   const language = document.languageId;
@@ -518,7 +518,7 @@ function activateCodeCompletion(context) {
   // 注册配置变更事件
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('joycode.enableAutoTrigger')) {
+      if (event.affectsConfiguration('navicode.enableAutoTrigger')) {
         // 配置已更改，可以在这里添加额外的处理逻辑
         console.log('自动触发设置已更改为:', isAutoTriggerEnabled());
       }
@@ -527,7 +527,7 @@ function activateCodeCompletion(context) {
 
   // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.generateSuggestion', async () => {
+    vscode.commands.registerCommand('navicode.generateSuggestion', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !languages.includes(editor.document.languageId)) return;
       
@@ -597,9 +597,9 @@ function activateCodeCompletion(context) {
   
   // 注册命令来切换自动触发功能
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleAutoTrigger', async () => {
+    vscode.commands.registerCommand('navicode.toggleAutoTrigger', async () => {
       const currentValue = isAutoTriggerEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableAutoTrigger', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableAutoTrigger', !currentValue, true);
       vscode.window.showInformationMessage(`代码自动补全已${!currentValue ? '启用' : '禁用'}`);
     })
   );
@@ -613,25 +613,25 @@ function activateCodeCompletion(context) {
 
   // 注册Git blame功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleGitBlame', async () => {
+    vscode.commands.registerCommand('navicode.toggleGitBlame', async () => {
       const currentValue = isGitBlameEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableGitBlame', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableGitBlame', !currentValue, true);
       vscode.window.showInformationMessage(`Git变更历史功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
   // 注册关联文件功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleRelatedFiles', async () => {
+    vscode.commands.registerCommand('navicode.toggleRelatedFiles', async () => {
       const currentValue = isRelatedFilesEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', !currentValue, true);
       vscode.window.showInformationMessage(`关联文件功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
 
   // 注册编辑提示词命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.editCustomPrompt', async () => {
-      const config = vscode.workspace.getConfiguration('joycode');
+    vscode.commands.registerCommand('navicode.editCustomPrompt', async () => {
+      const config = vscode.workspace.getConfiguration('navicode');
       const currentPrompt = config.get('customPrompt', '');
       
       const newPrompt = await vscode.window.showInputBox({
