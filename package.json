@@ -47,17 +47,12 @@
           "default": 50000,
           "description": "所有关联文件内容的总字符数限制。"
         },
-        "joycode.enableGitBlame": {
+        "joycode.enableGitDiff": {
           "type": "boolean",
           "default": false,
-          "description": "启用当前文件Git变更历史。开启后，会自动包含当前文件的Git blame信息。"
+          "description": "启用当前文件Git变更历史。开启后，会自动包含当前文件的Git Diff信息。"
         },
-        "joycode.maxBlameLines": {
-          "type": "number",
-          "default": 500,
-          "description": "最多包含的blame行数。"
-        },
-        "joycode.maxBlameHistorySize": {
+        "joycode.maxDiffSize": {
           "type": "number",
           "default": 20000,
           "description": "变更历史的最大字符数限制。"
@@ -104,8 +99,8 @@
         "title": "JoyCode: 切换关联文件分析功能"
       },
       {
-        "command": "joycode.toggleGitBlame",
-        "title": "JoyCode: 切换Git变更历史功能"
+        "command": "joycode.toggleGitDiff",
+        "title": "JoyCode: 切换查询Git变更历史功能"
       },
       {
         "command": "joycode.toggleReadme",
