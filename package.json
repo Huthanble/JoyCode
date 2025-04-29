@@ -48,20 +48,25 @@
           "default": 50000,
           "description": "所有关联文件内容的总字符数限制。"
         },
-        "navicode.enableGitBlame": {
+        "navicode.enableGitDiff": {
           "type": "boolean",
           "default": false,
-          "description": "启用当前文件Git变更历史。开启后，会自动包含当前文件的Git blame信息。"
+          "description": "启用当前文件Git变更历史。开启后，会自动包含当前文件的Git Diff信息。"
         },
-        "navicode.maxBlameLines": {
-          "type": "number",
-          "default": 500,
-          "description": "最多包含的blame行数。"
-        },
-        "navicode.maxBlameHistorySize": {
+        "navicode.maxDiffSize": {
           "type": "number",
           "default": 20000,
           "description": "变更历史的最大字符数限制。"
+        },
+        "navicode.enableReadme": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用当前文件README。开启后，会自动包含当前文件的README信息。"
+        },
+        "navicode.maxReadmeSize": {
+          "type": "number",
+          "default": 20000,
+          "description": "变更README的最大字符数限制。"
         }
       }
     },
@@ -95,8 +100,12 @@
         "title": "NaviCode: 切换关联文件分析功能"
       },
       {
-        "command": "navicode.toggleGitBlame",
+        "command": "navicode.toggleGitDiff",
         "title": "NaviCode: 切换Git变更历史功能"
+      },
+      {
+        "command": "navicode.toggleReadme",
+        "title": "NaviCode: 切换README读取功能"
       }
     ],
     "keybindings": [
