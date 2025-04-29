@@ -61,6 +61,16 @@
           "type": "number",
           "default": 20000,
           "description": "变更历史的最大字符数限制。"
+        },
+        "joycode.enableReadme": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用当前文件README。开启后，会自动包含当前文件的README信息。"
+        },
+        "joycode.maxReadmeSize": {
+          "type": "number",
+          "default": 20000,
+          "description": "变更README的最大字符数限制。"
         }
       }
     },
@@ -96,6 +106,10 @@
       {
         "command": "joycode.toggleGitBlame",
         "title": "JoyCode: 切换Git变更历史功能"
+      },
+      {
+        "command": "joycode.toggleReadme",
+        "title": "JoyCode: 切换Readme读取功能"
       }
     ],
     "keybindings": [

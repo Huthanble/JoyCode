@@ -75,6 +75,9 @@ async function getSuggestion(document, position) {
    // 获取当前文件的Git blame信息
   const blameHistory = await getFileBlameHistory(document);
 
+  // 读取 README
+  const readme = getReadmeContent();
+
   // 如果文件大小超出限制，显示提示
   if (relatedFiles.truncated) {
     vscode.window.showWarningMessage(
@@ -93,12 +96,22 @@ async function getSuggestion(document, position) {
     // 构建包含自定义提示词的上下文
     let promptWithContext = '';
 
-    promptWithContext = 
-        `###这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:###\n${customPrompt}\n\n`;
+    promptWithContext += 
+        `/*这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:*/\n${customPrompt}\n\n`;
+
+    // 如果有 README
+    if (readme.content) {
+      promptWithContext += "/*这一部分是用户github仓库中的README*/\n";
+      promptWithContext += "```\n" + readme.content + "\n```\n";
+      if (readme.truncated) {
+        promptWithContext += "注意：README 内容因长度限制被截断。\n";
+      }
+      promptWithContext += "\n";
+    }
 
     // 添加Git blame信息（正确性尚未测试）
     if (blameHistory.blameLines && blameHistory.blameLines.length > 0) {
-      promptWithContext += "###这一部分内容是当前文件在用户的github仓库中的变更历史:###\n";
+      promptWithContext += "/*这一部分内容是当前文件在用户的github仓库中的变更历史:*/\n";
       promptWithContext += `文件: ${path.basename(document.fileName)}\n`;
       
       for (const line of blameHistory.blameLines) {
@@ -114,7 +127,7 @@ async function getSuggestion(document, position) {
 
     // 添加关联文件内容（这部分的代码正确性没有测试，如果有问题直接注释掉）
     if (relatedFiles.files.length > 0) {
-      promptWithContext += "###这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：###\n";
+      promptWithContext += "/*这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：*/\n";
       
       for (const file of relatedFiles.files) {
         const fileName = path.basename(file.path);
@@ -127,7 +140,7 @@ async function getSuggestion(document, position) {
     }
 
     promptWithContext +=
-        `###代码上下文###\n` +
+        `/*代码上下文*/\n` +
         `文件: ${document.fileName}\n` +
         `语言: ${document.languageId}\n` +
         `前缀代码:\n${prompt}\n\n`;
@@ -156,6 +169,56 @@ function getCustomPrompt(document) {
   if (!promptTemplate) return "无";
   
   return promptTemplate;
+}
+
+/**
+ * 获取仓库根目录（存在 .git 的目录）
+ */
+function findGitRoot(startPath) {
+  let dir = startPath;
+  while (dir && dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+/**
+ * 检查是否启用 README 功能
+ */
+function isReadmeEnabled() {
+  return vscode.workspace.getConfiguration('joycode').get('enableReadme', true);
+}
+
+/**
+ * 读取根目录 README
+ * @returns {{ content: string, truncated: boolean }}
+ */
+function getReadmeContent() {
+  if (!isReadmeEnabled()) return { content: '', truncated: false };
+
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) return { content: '', truncated: false };
+
+  const root = findGitRoot(workspaceFolders[0].uri.fsPath);
+  if (!root) return { content: '', truncated: false };
+
+  const candidates = ['README.md', 'README.markdown', 'README.txt', 'README'];
+  for (const name of candidates) {
+    const p = path.join(root, name);
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+      let data = fs.readFileSync(p, 'utf8');
+      const maxSize = vscode.workspace.getConfiguration('joycode').get('maxReadmeSize', 20000);
+      let truncated = false;
+      if (data.length > maxSize) {
+        data = data.slice(0, maxSize) + '\n\n...（已截断）';
+        truncated = true;
+      }
+      return { content: data, truncated };
+    }
+  }
+
+  return { content: '', truncated: false };
 }
 
 /**
@@ -603,6 +666,15 @@ function activateCodeCompletion(context) {
       vscode.window.showInformationMessage(`代码自动补全已${!currentValue ? '启用' : '禁用'}`);
     })
   );
+
+  // 注册命令来切换读取README功能
+  context.subscriptions.push(
+    vscode.commands.registerCommand('joycode.toggleReadme', async () => {
+      const currentValue = isReadmeEnabled();
+      await vscode.workspace.getConfiguration('joycode').update('enableReadme', !currentValue, true);
+      vscode.window.showInformationMessage(`README读取功能${!currentValue ? '启用' : '禁用'}`);
+    })
+  );
   
   // 监听编辑器关闭事件，确保清理装饰器
   context.subscriptions.push(
@@ -648,6 +720,7 @@ function activateCodeCompletion(context) {
       
       if (newPrompt !== undefined) { // 用户没有取消
         await config.update('customPrompt', newPrompt, true);
+        console.log("用户自定义提示词：",newPrompt);
         vscode.window.showInformationMessage('代码补全提示词已更新');
       }
     })
