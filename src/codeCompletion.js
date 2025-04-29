@@ -72,8 +72,11 @@ async function getSuggestion(document, position) {
   // 获取关联文件内容
   const relatedFiles = await getRelatedFilesContent(document);
 
-   // 获取当前文件的Git blame信息
-  const blameHistory = await getFileBlameHistory(document);
+  // 读取 README
+  const readme = getReadmeContent();
+
+  // 读取当前文件 diff
+  const fileDiff = getCurrentFileDiff(document);
 
   // 如果文件大小超出限制，显示提示
   if (relatedFiles.truncated) {
@@ -83,7 +86,7 @@ async function getSuggestion(document, position) {
       "继续"
     ).then(selection => {
       if (selection === "关闭相关文件功能") {
-        vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', false, true);
+        vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', false, true);
         vscode.window.showInformationMessage("已关闭相关文件功能");
       }
     });
@@ -93,28 +96,30 @@ async function getSuggestion(document, position) {
     // 构建包含自定义提示词的上下文
     let promptWithContext = '';
 
-    promptWithContext = 
-        `###这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:###\n${customPrompt}\n\n`;
+    promptWithContext += 
+        `/*这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:*/\n${customPrompt}\n\n`;
 
-    // 添加Git blame信息（正确性尚未测试）
-    if (blameHistory.blameLines && blameHistory.blameLines.length > 0) {
-      promptWithContext += "###这一部分内容是当前文件在用户的github仓库中的变更历史:###\n";
-      promptWithContext += `文件: ${path.basename(document.fileName)}\n`;
-      
-      for (const line of blameHistory.blameLines) {
-        promptWithContext += `${line}\n`;
+    // 如果有 README
+    if (readme.content) {
+      promptWithContext += "/*这一部分是用户github仓库中的README*/\n";
+      promptWithContext += "```\n" + readme.content + "\n```\n";
+      if (readme.truncated) {
+        promptWithContext += "注意：README 内容因长度限制被截断。\n";
       }
-      
-      if (blameHistory.truncated) {
-        promptWithContext += `注意: ${blameHistory.message}\n`;
-      }
-      
       promptWithContext += "\n";
+    }
+
+    // 当前文件的改动 diff(尚未测试)
+    if (fileDiff.diff) {
+      promptWithContext += '/*当前未提交/未合并到最新提交的变更(git diff)*/\n';
+      promptWithContext += '```diff\n' + fileDiff.diff + '\n```\n';
+      if (fileDiff.truncated) promptWithContext += '注意:diff 因长度限制被截断。\n';
+      promptWithContext += '\n';
     }
 
     // 添加关联文件内容（这部分的代码正确性没有测试，如果有问题直接注释掉）
     if (relatedFiles.files.length > 0) {
-      promptWithContext += "###这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：###\n";
+      promptWithContext += "/*这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：*/\n";
       
       for (const file of relatedFiles.files) {
         const fileName = path.basename(file.path);
@@ -127,12 +132,16 @@ async function getSuggestion(document, position) {
     }
 
     promptWithContext +=
-        `###代码上下文###\n` +
+        `/*代码上下文*/\n` +
         `文件: ${document.fileName}\n` +
         `语言: ${document.languageId}\n` +
         `前缀代码:\n${prompt}\n\n`;
     
-    console.log("生成的前文（提示词+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
+    console.log("自动代码补全开关：",vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true))
+    console.log("文件上下文开关：",vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', true))
+    console.log("Git变更历史开关：",vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true))
+    console.log("查询README开关：",vscode.workspace.getConfiguration('navicode').get('enableReadme', true))
+    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
 
     const response = await openai.completions.create({
       model: 'deepseek-chat',
@@ -151,7 +160,7 @@ async function getSuggestion(document, position) {
 
 // 获取用户自定义提示词，应用模板变量
 function getCustomPrompt(document) {
-  const promptTemplate = vscode.workspace.getConfiguration('joycode').get('customPrompt', "无");
+  const promptTemplate = vscode.workspace.getConfiguration('navicode').get('customPrompt', "无");
   
   if (!promptTemplate) return "无";
   
@@ -159,115 +168,94 @@ function getCustomPrompt(document) {
 }
 
 /**
- * 检查是否启用Git blame功能
+ * 获取仓库根目录（存在 .git 的目录）
  */
-function isGitBlameEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableGitBlame', false);
+function findGitRoot(startPath) {
+  let dir = startPath;
+  while (dir && dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    dir = path.dirname(dir);
+  }
+  return null;
 }
 
 /**
- * 检查当前文件是否在Git仓库中
- * @param {string} filePath - 文件路径
- * @returns {boolean} 是否在Git仓库中
+ * 检查是否启用 README 功能
  */
-function isFileInGitRepository(filePath) {
-  try {
-    if (!filePath) return false;
-    
-    const dirPath = path.dirname(filePath);
-    let currentDir = dirPath;
-    
-    // 向上查找.git目录，检查是否在Git仓库中
-    while (currentDir && currentDir !== path.dirname(currentDir)) {
-      const gitDir = path.join(currentDir, '.git');
-      if (fs.existsSync(gitDir)) {
-        return true;
-      }
-      currentDir = path.dirname(currentDir);
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('检查文件是否在Git仓库中失败:', error);
-    return false;
-  }
+function isReadmeEnabled() {
+  return vscode.workspace.getConfiguration('navicode').get('enableReadme', true);
 }
 
 /**
- * 获取当前文件的Git blame信息
- * @param {vscode.TextDocument} document - 当前文档
- * @returns {Promise<Object>} 包含blame信息的对象
+ * 读取根目录 README
+ * @returns {{ content: string, truncated: boolean }}
  */
-async function getFileBlameHistory(document) {
-  if (!isGitBlameEnabled() || !document) {
-    return { blameLines: [] };
-  }
-  
-  const filePath = document.fileName;
-  
-  if (!filePath || !isFileInGitRepository(filePath)) {
-    return { blameLines: [] };
-  }
-  
-  const maxBlameLines = vscode.workspace.getConfiguration('joycode').get('maxBlameLines', 50);
-  const maxBlameSize = vscode.workspace.getConfiguration('joycode').get('maxBlameHistorySize', 2000);
-  
-  try {
-    const dirPath = path.dirname(filePath);
-    const relativePath = path.relative(dirPath, filePath);
-    
-    // 使用git blame获取文件变更历史
-    // 格式: [hash] ([author] [date] [line]) [content]
-    const command = `git -C "${dirPath}" blame -n -w --date=short "${relativePath}"`;
-    const output = execSync(command).toString();
-    
-    // 解析blame输出
-    const blameLines = [];
-    let totalSize = 0;
-    let truncated = false;
-    
-    const lines = output.split('\n');
-    
-    // 只保留指定数量的行
-    const limitedLines = lines.length > maxBlameLines 
-      ? lines.slice(0, maxBlameLines) 
-      : lines;
-    
-    for (const line of limitedLines) {
-      if (line.trim() === '') continue;
+function getReadmeContent() {
+  if (!isReadmeEnabled()) return { content: '', truncated: false };
 
-      console.log("提取到的文件更改历史：",line);
-      console.log("\n");
-      
-      // 如果这行太长，截断它
-      if (line.length > maxBlameSize && blameLines.length === 0) {
-        blameLines.push(line.substring(0, maxBlameSize) + '... (truncated)');
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) return { content: '', truncated: false };
+
+  const root = findGitRoot(workspaceFolders[0].uri.fsPath);
+  if (!root) return { content: '', truncated: false };
+
+  const candidates = ['README.md', 'README.markdown', 'README.txt', 'README'];
+  for (const name of candidates) {
+    const p = path.join(root, name);
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+      let data = fs.readFileSync(p, 'utf8');
+      const maxSize = vscode.workspace.getConfiguration('navicode').get('maxReadmeSize', 20000);
+      let truncated = false;
+      if (data.length > maxSize) {
+        data = data.slice(0, maxSize) + '\n\n...（已截断）';
         truncated = true;
-        break;
       }
-      
-      // 检查总大小限制
-      if (totalSize + line.length > maxBlameSize) {
-        truncated = true;
-        break;
-      }
-      
-      blameLines.push(line);
-      totalSize += line.length;
+      return { content: data, truncated };
     }
-    
-    return {
-      blameLines,
-      truncated,
-      message: truncated ? "变更历史因超出长度限制而被截断" : ""
-    };
-  } catch (error) {
-    console.error('获取Git blame信息失败:', error);
-    return { 
-      blameLines: [],
-      error: `获取Git blame信息失败: ${error.message}`
-    };
   }
+
+  return { content: '', truncated: false };
+}
+
+/**
+ * 检查是否启用 git diff 功能
+ */
+function isGitDiffEnabled() {
+  return vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true);
+}
+
+/**
+ * 读取当前文件与 HEAD（最新提交）之间的 diff（还未测试）
+ * @param {vscode.TextDocument} document
+ * @returns {{ diff: string, truncated: boolean }}
+ */
+function getCurrentFileDiff(document) {
+  if (!isGitDiffEnabled()) return { diff: '', truncated: false };
+
+  const maxChars = vscode.workspace.getConfiguration('navicode').get('maxDiffSize', 50000);
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) return { diff: '', truncated: false };
+
+  const gitRoot = findGitRoot(workspaceFolders[0].uri.fsPath);
+  if (!gitRoot) return { diff: '', truncated: false };
+
+  // 相对于仓库根的文件路径
+  const relPath = path.relative(gitRoot, document.uri.fsPath).replace(/\\/g, '/');
+  let raw;
+  try {
+    // HEAD 表示最新一次提交；如果有未提交改动，git diff 会把它们包含进来
+    raw = execSync(`git diff HEAD -- ${relPath}`, { cwd: gitRoot, encoding: 'utf8' });
+  } catch (e) {
+    // 可能没任何改动或命令失败
+    raw = '';
+  }
+
+  let truncated = false;
+  if (raw.length > maxChars) {
+    raw = raw.slice(0, maxChars) + '\n...（已截断）';
+    truncated = true;
+  }
+  return { diff: raw, truncated };
 }
 
 /**
@@ -275,14 +263,14 @@ async function getFileBlameHistory(document) {
  * @returns {boolean} - 是否启用自动触发
  */
 function isAutoTriggerEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableAutoTrigger', true);
+  return vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true);
 }
 
 /**
  * 检查是否启用关联文件功能
  */
 function isRelatedFilesEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableRelatedFiles', false);
+  return vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', false);
 }
 
 /**
@@ -445,8 +433,8 @@ async function readFileContent(filePath) {
 async function getRelatedFilesContent(document) {
   if (!isRelatedFilesEnabled()) return { files: [] };
   
-  const maxFileSize = vscode.workspace.getConfiguration('joycode').get('maxRelatedFileSize', 50000);
-  const maxTotalSize = vscode.workspace.getConfiguration('joycode').get('maxTotalRelatedFilesSize', 50000);
+  const maxFileSize = vscode.workspace.getConfiguration('navicode').get('maxRelatedFileSize', 50000);
+  const maxTotalSize = vscode.workspace.getConfiguration('navicode').get('maxTotalRelatedFilesSize', 50000);
   
   const content = document.getText();
   const language = document.languageId;
@@ -518,7 +506,7 @@ function activateCodeCompletion(context) {
   // 注册配置变更事件
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('joycode.enableAutoTrigger')) {
+      if (event.affectsConfiguration('navicode.enableAutoTrigger')) {
         // 配置已更改，可以在这里添加额外的处理逻辑
         console.log('自动触发设置已更改为:', isAutoTriggerEnabled());
       }
@@ -527,7 +515,7 @@ function activateCodeCompletion(context) {
 
   // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.generateSuggestion', async () => {
+    vscode.commands.registerCommand('navicode.generateSuggestion', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !languages.includes(editor.document.languageId)) return;
       
@@ -597,10 +585,19 @@ function activateCodeCompletion(context) {
   
   // 注册命令来切换自动触发功能
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleAutoTrigger', async () => {
+    vscode.commands.registerCommand('navicode.toggleAutoTrigger', async () => {
       const currentValue = isAutoTriggerEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableAutoTrigger', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableAutoTrigger', !currentValue, true);
       vscode.window.showInformationMessage(`代码自动补全已${!currentValue ? '启用' : '禁用'}`);
+    })
+  );
+
+  // 注册命令来切换读取README功能
+  context.subscriptions.push(
+    vscode.commands.registerCommand('navicode.toggleReadme', async () => {
+      const currentValue = isReadmeEnabled();
+      await vscode.workspace.getConfiguration('navicode').update('enableReadme', !currentValue, true);
+      vscode.window.showInformationMessage(`README读取功能${!currentValue ? '启用' : '禁用'}`);
     })
   );
   
@@ -611,27 +608,28 @@ function activateCodeCompletion(context) {
     })
   );
 
-  // 注册Git blame功能的开关命令
+  // 注册Git Diff功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleGitBlame', async () => {
-      const currentValue = isGitBlameEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableGitBlame', !currentValue, true);
-      vscode.window.showInformationMessage(`Git变更历史功能已${!currentValue ? '启用' : '禁用'}`);
+    vscode.commands.registerCommand('navicode.toggleGitDiff', async () => {
+      const currentValue = isGitDiffEnabled();
+      await vscode.workspace.getConfiguration('navicode').update('enableGitDiff', !currentValue, true);
+      vscode.window.showInformationMessage(`Git查询变更历史功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
+
   // 注册关联文件功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleRelatedFiles', async () => {
+    vscode.commands.registerCommand('navicode.toggleRelatedFiles', async () => {
       const currentValue = isRelatedFilesEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', !currentValue, true);
       vscode.window.showInformationMessage(`关联文件功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
 
   // 注册编辑提示词命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.editCustomPrompt', async () => {
-      const config = vscode.workspace.getConfiguration('joycode');
+    vscode.commands.registerCommand('navicode.editCustomPrompt', async () => {
+      const config = vscode.workspace.getConfiguration('navicode');
       const currentPrompt = config.get('customPrompt', '');
       
       const newPrompt = await vscode.window.showInputBox({
@@ -648,6 +646,7 @@ function activateCodeCompletion(context) {
       
       if (newPrompt !== undefined) { // 用户没有取消
         await config.update('customPrompt', newPrompt, true);
+        console.log("用户自定义提示词：",newPrompt);
         vscode.window.showInformationMessage('代码补全提示词已更新');
       }
     })
