@@ -1,7 +1,8 @@
 {
-  "name": "joycode",
-  "displayName": "JoyCode",
+  "name": "navicode",
+  "displayName": "NaviCode",
   "description": "This is a code intelligent completion plugin that helps you enjoy coding.",
+  "publisher": "weiziyan",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.97.2"
@@ -20,49 +21,49 @@
   "main": "./extension.js",
   "contributes": {
     "configuration": {
-      "title": "JoyCode",
+      "title": "NaviCode",
       "properties": {
-        "joycode.enableAutoTrigger": {
+        "navicode.enableAutoTrigger": {
           "type": "boolean",
           "default": true,
           "description": "启用自动触发代码补全。禁用后，只能通过快捷键(Alt+Ctrl+.)手动触发。"
         },
-        "joycode.customPrompt": {
+        "navicode.customPrompt": {
           "type": "string",
           "default": "用户提示词为空",
           "description": "自定义代码补全提示词。"
         },
-        "joycode.enableRelatedFiles": {
+        "navicode.enableRelatedFiles": {
           "type": "boolean",
           "default": false,
           "description": "启用关联文件上下文。开启后，会自动分析导入语句并包含相关文件内容。"
         },
-        "joycode.maxRelatedFileSize": {
+        "navicode.maxRelatedFileSize": {
           "type": "number",
           "default": 50000,
           "description": "单个关联文件的最大字符数限制。超过此限制的文件内容将被截断。"
         },
-        "joycode.maxTotalRelatedFilesSize": {
+        "navicode.maxTotalRelatedFilesSize": {
           "type": "number",
           "default": 50000,
           "description": "所有关联文件内容的总字符数限制。"
         },
-        "joycode.enableGitDiff": {
+        "navicode.enableGitDiff": {
           "type": "boolean",
           "default": false,
           "description": "启用当前文件Git变更历史。开启后，会自动包含当前文件的Git Diff信息。"
         },
-        "joycode.maxDiffSize": {
+        "navicode.maxDiffSize": {
           "type": "number",
           "default": 20000,
           "description": "变更历史的最大字符数限制。"
         },
-        "joycode.enableReadme": {
+        "navicode.enableReadme": {
           "type": "boolean",
           "default": false,
           "description": "启用当前文件README。开启后，会自动包含当前文件的README信息。"
         },
-        "joycode.maxReadmeSize": {
+        "navicode.maxReadmeSize": {
           "type": "number",
           "default": 20000,
           "description": "变更README的最大字符数限制。"
@@ -71,52 +72,51 @@
     },
     "commands": [
       {
-        "command": "joycode.helloWorld",
+        "command": "navicode.helloWorld",
         "title": "Hello World"
       },
       {
-        "command": "joycode.openChat",
+        "command": "navicode.openChat",
         "title": "打开聊天窗口"
       },
       {
-        "command": "joycode.generateSuggestion",
+        "command": "navicode.generateSuggestion",
         "title": "手动触发自动补全功能"
       },
       {
-        "command": "joycode.toggleAutoTrigger",
-        "title": "JoyCode: 切换自动触发功能"
+        "command": "navicode.toggleAutoTrigger",
+        "title": "NaviCode: 切换自动触发功能"
       },
       {
         "command": "extension.commentToCode",
         "title": "将注释转换为代码"
       },
       {
-        "command": "joycode.editCustomPrompt",
-        "title": "JoyCode: 编辑代码补全提示词"
+        "command": "navicode.editCustomPrompt",
+        "title": "NaviCode: 编辑代码补全提示词"
       },
       {
-        "command": "joycode.toggleRelatedFiles",
-        "title": "JoyCode: 切换关联文件分析功能"
+        "command": "navicode.toggleRelatedFiles",
+        "title": "NaviCode: 切换关联文件分析功能"
       },
       {
-        "command": "joycode.toggleGitDiff",
-        "title": "JoyCode: 切换查询Git变更历史功能"
+        "command": "navicode.toggleGitDiff",
+        "title": "NaviCode: 切换Git变更历史功能"
       },
       {
-        "command": "joycode.toggleReadme",
-        "title": "JoyCode: 切换Readme读取功能"
+        "command": "navicode.toggleReadme",
+        "title": "NaviCode: 切换README读取功能"
       }
     ],
     "keybindings": [
       {
-        "command": "joycode.generateSuggestion",
+        "command": "navicode.generateSuggestion",
         "key": "ctrl+alt+.",
         "mac": "cmd+alt+.",
         "when": "editorTextFocus"
       }
     ],
-  
-    "menus":{
+    "menus": {
       "editor/context": [
         {
           "command": "extension.commentToCode",
@@ -125,7 +125,6 @@
         }
       ]
     }
-    
   },
   "scripts": {
     "lint": "eslint .",
@@ -135,7 +134,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "@types/vscode": "^1.98.0",
+    "@types/vscode": "^1.97.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "eslint": "^9.21.0",

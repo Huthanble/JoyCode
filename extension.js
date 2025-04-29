@@ -9,7 +9,7 @@ const { deactivateCommentToCode } = require('./src/commentToCode');
 function activate(context) {
   activateCodeCompletion(context);
   activateCommentToCode(context);
-  let disposable = vscode.commands.registerCommand("joycode.openChat", () => {
+  let disposable = vscode.commands.registerCommand("navicode.openChat", () => {
     // 只有执行 openChat 命令时才会打开 AI Chat 界面
 	activateAiChatCodeGen(context);
   });

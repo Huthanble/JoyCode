@@ -86,7 +86,7 @@ async function getSuggestion(document, position) {
       "继续"
     ).then(selection => {
       if (selection === "关闭相关文件功能") {
-        vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', false, true);
+        vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', false, true);
         vscode.window.showInformationMessage("已关闭相关文件功能");
       }
     });
@@ -137,10 +137,10 @@ async function getSuggestion(document, position) {
         `语言: ${document.languageId}\n` +
         `前缀代码:\n${prompt}\n\n`;
     
-    console.log("自动代码补全开关：",vscode.workspace.getConfiguration('joycode').get('enableAutoTrigger', true))
-    console.log("文件上下文开关：",vscode.workspace.getConfiguration('joycode').get('enableRelatedFiles', true))
-    console.log("Git变更历史开关：",vscode.workspace.getConfiguration('joycode').get('enableGitDiff', true))
-    console.log("查询README开关：",vscode.workspace.getConfiguration('joycode').get('enableReadme', true))
+    console.log("自动代码补全开关：",vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true))
+    console.log("文件上下文开关：",vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', true))
+    console.log("Git变更历史开关：",vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true))
+    console.log("查询README开关：",vscode.workspace.getConfiguration('navicode').get('enableReadme', true))
     console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
 
     const response = await openai.completions.create({
@@ -160,7 +160,7 @@ async function getSuggestion(document, position) {
 
 // 获取用户自定义提示词，应用模板变量
 function getCustomPrompt(document) {
-  const promptTemplate = vscode.workspace.getConfiguration('joycode').get('customPrompt', "无");
+  const promptTemplate = vscode.workspace.getConfiguration('navicode').get('customPrompt', "无");
   
   if (!promptTemplate) return "无";
   
@@ -183,7 +183,7 @@ function findGitRoot(startPath) {
  * 检查是否启用 README 功能
  */
 function isReadmeEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableReadme', true);
+  return vscode.workspace.getConfiguration('navicode').get('enableReadme', true);
 }
 
 /**
@@ -204,7 +204,7 @@ function getReadmeContent() {
     const p = path.join(root, name);
     if (fs.existsSync(p) && fs.statSync(p).isFile()) {
       let data = fs.readFileSync(p, 'utf8');
-      const maxSize = vscode.workspace.getConfiguration('joycode').get('maxReadmeSize', 20000);
+      const maxSize = vscode.workspace.getConfiguration('navicode').get('maxReadmeSize', 20000);
       let truncated = false;
       if (data.length > maxSize) {
         data = data.slice(0, maxSize) + '\n\n...（已截断）';
@@ -221,7 +221,7 @@ function getReadmeContent() {
  * 检查是否启用 git diff 功能
  */
 function isGitDiffEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableGitDiff', true);
+  return vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true);
 }
 
 /**
@@ -232,7 +232,7 @@ function isGitDiffEnabled() {
 function getCurrentFileDiff(document) {
   if (!isGitDiffEnabled()) return { diff: '', truncated: false };
 
-  const maxChars = vscode.workspace.getConfiguration('joycode').get('maxDiffSize', 50000);
+  const maxChars = vscode.workspace.getConfiguration('navicode').get('maxDiffSize', 50000);
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders) return { diff: '', truncated: false };
 
@@ -263,14 +263,14 @@ function getCurrentFileDiff(document) {
  * @returns {boolean} - 是否启用自动触发
  */
 function isAutoTriggerEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableAutoTrigger', true);
+  return vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true);
 }
 
 /**
  * 检查是否启用关联文件功能
  */
 function isRelatedFilesEnabled() {
-  return vscode.workspace.getConfiguration('joycode').get('enableRelatedFiles', false);
+  return vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', false);
 }
 
 /**
@@ -433,8 +433,8 @@ async function readFileContent(filePath) {
 async function getRelatedFilesContent(document) {
   if (!isRelatedFilesEnabled()) return { files: [] };
   
-  const maxFileSize = vscode.workspace.getConfiguration('joycode').get('maxRelatedFileSize', 50000);
-  const maxTotalSize = vscode.workspace.getConfiguration('joycode').get('maxTotalRelatedFilesSize', 50000);
+  const maxFileSize = vscode.workspace.getConfiguration('navicode').get('maxRelatedFileSize', 50000);
+  const maxTotalSize = vscode.workspace.getConfiguration('navicode').get('maxTotalRelatedFilesSize', 50000);
   
   const content = document.getText();
   const language = document.languageId;
@@ -506,7 +506,7 @@ function activateCodeCompletion(context) {
   // 注册配置变更事件
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('joycode.enableAutoTrigger')) {
+      if (event.affectsConfiguration('navicode.enableAutoTrigger')) {
         // 配置已更改，可以在这里添加额外的处理逻辑
         console.log('自动触发设置已更改为:', isAutoTriggerEnabled());
       }
@@ -515,7 +515,7 @@ function activateCodeCompletion(context) {
 
   // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.generateSuggestion', async () => {
+    vscode.commands.registerCommand('navicode.generateSuggestion', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !languages.includes(editor.document.languageId)) return;
       
@@ -585,18 +585,18 @@ function activateCodeCompletion(context) {
   
   // 注册命令来切换自动触发功能
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleAutoTrigger', async () => {
+    vscode.commands.registerCommand('navicode.toggleAutoTrigger', async () => {
       const currentValue = isAutoTriggerEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableAutoTrigger', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableAutoTrigger', !currentValue, true);
       vscode.window.showInformationMessage(`代码自动补全已${!currentValue ? '启用' : '禁用'}`);
     })
   );
 
   // 注册命令来切换读取README功能
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleReadme', async () => {
+    vscode.commands.registerCommand('navicode.toggleReadme', async () => {
       const currentValue = isReadmeEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableReadme', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableReadme', !currentValue, true);
       vscode.window.showInformationMessage(`README读取功能${!currentValue ? '启用' : '禁用'}`);
     })
   );
@@ -610,26 +610,26 @@ function activateCodeCompletion(context) {
 
   // 注册Git Diff功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleGitDiff', async () => {
+    vscode.commands.registerCommand('navicode.toggleGitDiff', async () => {
       const currentValue = isGitDiffEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableGitDiff', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableGitDiff', !currentValue, true);
       vscode.window.showInformationMessage(`Git查询变更历史功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
 
   // 注册关联文件功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.toggleRelatedFiles', async () => {
+    vscode.commands.registerCommand('navicode.toggleRelatedFiles', async () => {
       const currentValue = isRelatedFilesEnabled();
-      await vscode.workspace.getConfiguration('joycode').update('enableRelatedFiles', !currentValue, true);
+      await vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', !currentValue, true);
       vscode.window.showInformationMessage(`关联文件功能已${!currentValue ? '启用' : '禁用'}`);
     })
   );
 
   // 注册编辑提示词命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('joycode.editCustomPrompt', async () => {
-      const config = vscode.workspace.getConfiguration('joycode');
+    vscode.commands.registerCommand('navicode.editCustomPrompt', async () => {
+      const config = vscode.workspace.getConfiguration('navicode');
       const currentPrompt = config.get('customPrompt', '');
       
       const newPrompt = await vscode.window.showInputBox({
