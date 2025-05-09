@@ -1,8 +1,9 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { openai } = require('./openaiClient'); // 确保 openaiClient.js 正确配置
-
+const { getOpenAIInstance,getSelectedModel } = require('./openaiClient'); // 确保 openaiClient.js 正确配置
+const openai=getOpenAIInstance();
+const model = getSelectedModel();
 function activateAiChatCodeGen(context) {
     // 在创建 Webview 前先获取并缓存编辑器状态
     let fileContent = '';
@@ -107,7 +108,7 @@ function activateAiChatCodeGen(context) {
             addToChatHistory('user', userInput);
             try {
                 const response = await openai.chat.completions.create({
-                    model: "deepseek-chat",
+                    model: model,
                     messages: [
                     { role: "system", content: `当前文件路径: ${filePath}\n文件内容:\n${fileContent},你是代码助手，请阅读文件内容并回答问题。` },
                     ...chatHistory.map(msg => ({
