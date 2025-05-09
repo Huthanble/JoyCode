@@ -1,24 +1,27 @@
-：
+:
+
 #include <iostream>
 
-// Function to add two numbers
-int addNumbers(int num1, int num2) {
-    return num1 + num2;
-}
+// 函数声明
+int add(int a, int b);
 
 int main() {
-    int firstNumber, secondNumber;
+    int num1, num2;
     
-    // Input the two numbers
-    std::cout << "Enter first number: ";
-    std::cin >> firstNumber;
-    std::cout << "Enter second number: ";
-    std::cin >> secondNumber;
+    // 输入两个整数
+    std::cout << "请输入第一个整数: ";
+    std::cin >> num1;
+    std::cout << "请输入第二个整数: ";
+    std::cin >> num2;
     
-    // Calculate and display the sum
-    int sum = addNumbers(firstNumber, secondNumber);
-    std::cout << "The sum of " << firstNumber << " and " << secondNumber 
-              << " is: " << sum << std::endl;
+    // 调用add函数并输出结果
+    int sum = add(num1, num2);
+    std::cout << "两数之和为: " << sum << std::endl;
     
     return 0;
+}
+
+// 函数定义：实现两数相加
+int add(int a, int b) {
+    return a + b;
 }
