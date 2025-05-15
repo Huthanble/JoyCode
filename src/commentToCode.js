@@ -1,17 +1,18 @@
 const vscode = require('vscode');
-const { openai } = require('./openaiClient');
+const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
 const { detectLanguage, runCode } = require('./tools');
-
+const openai = getOpenAIInstance();
+const model = getSelectedModel();
 async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
   let attempt = 0;
   while (attempt < maxAttempts) {
     const result = await runCode(lang, code);
     if (result.success) return { success: true, code, output: result.message };
-
+    
     const feedbackPrompt = `你根据以下注释生成了这段代码：\n\n注释: ${userKeywords}\n\n代码：\n\n\`\`\`${lang}\n${code}\n\`\`\`\n\n运行时报错如下：\n${result.message}\n\n请只输出修复后的完整代码（无额外解释）`;
-
+    
     const response = await openai.completions.create({
-      model: 'deepseek-chat',
+      model: model,
       prompt: feedbackPrompt,
       max_tokens: 1500
     });
@@ -73,7 +74,7 @@ async function generateCodeFromComment() {
         async (progress, token) => {
           try {
             const response = await openai.completions.create({
-              model: 'deepseek-chat',
+              model: model,
               prompt: prompt,
               max_tokens: 1500
             });
@@ -103,7 +104,7 @@ async function generateCodeFromComment() {
         async (progress, token) => {
           try {
             const response = await openai.completions.create({
-              model: 'deepseek-chat',
+              model: model,
               prompt: prompt,
               max_tokens: 500
             });

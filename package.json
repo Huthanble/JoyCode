@@ -67,6 +67,12 @@
           "type": "number",
           "default": 20000,
           "description": "变更README的最大字符数限制。"
+        },
+        "navicode.selectedModel": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "description": "选择当前使用的 AI 模型",
+          "enum": ["deepseek-chat", "gpt-4", "gpt-3.5"]
         }
       }
     },
@@ -106,6 +112,10 @@
       {
         "command": "navicode.toggleReadme",
         "title": "NaviCode: 切换README读取功能"
+      },
+      {
+        "command": "navicode.switchModel",
+        "title": "切换 AI 模型"
       }
     ],
     "keybindings": [
