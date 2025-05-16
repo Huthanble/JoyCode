@@ -139,9 +139,9 @@ async function getSuggestion(document, position) {
     console.log("文件上下文开关：",vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', true))
     console.log("Git变更历史开关：",vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true))
     console.log("查询README开关：",vscode.workspace.getConfiguration('navicode').get('enableReadme', true))
-    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
 
     //纯粹代码前缀版本
+    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",prompt);
     const response = await openai.completions.create({
       model: model,
       prompt: prompt,
@@ -150,7 +150,8 @@ async function getSuggestion(document, position) {
       temperature: 0.5,
       stop: ['\n\n']
     });
-
+    
+    // console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
     // const response = await openai.completions.create({
     //   model: 'deepseek-chat',
     //   prompt: promptWithContext,
@@ -159,6 +160,7 @@ async function getSuggestion(document, position) {
     //   temperature: 0.5,
     //   stop: ['\n\n']
     // });
+    
     return response.choices[0].text.trim();
   } catch (error) {
     console.error('调用 DeepSeek API 出错:', error);
