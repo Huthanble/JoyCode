@@ -9,7 +9,7 @@ const modelConfigs = {
   },
   'gpt-4': {
     baseURL: 'https://api.openai.com/v1',
-    apiKey: 'sk-'
+    apiKey: ''
   },
   'gpt-3.5': {
     baseURL: 'https://api.openai.com/v1',
@@ -17,18 +17,18 @@ const modelConfigs = {
   }
 };
 
-/**
- * 获取当前选定的模型
- * @returns {string} 当前模型名称
+/*
+  获取当前选定的模型
+  @returns {string} 当前模型名称
  */
 function getSelectedModel() {
   const config = vscode.workspace.getConfiguration('navicode');
   return config.get('selectedModel', 'deepseek-chat'); // 默认使用 deepseek-chat
 }
 
-/**
- * 获取 OpenAI 实例，根据当前选定的模型动态配置
- * @returns {OpenAI} OpenAI 实例
+/*
+  获取 OpenAI 实例，根据当前选定的模型动态配置
+  @returns {OpenAI} OpenAI 实例
  */
 function getOpenAIInstance() {
   const selectedModel = getSelectedModel();
