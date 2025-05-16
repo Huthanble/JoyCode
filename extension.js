@@ -2,9 +2,11 @@ const vscode = require('vscode');
 const { activateCodeCompletion } = require('./src/codeCompletion');
 const { activateAiChatCodeGen } = require('./src/aiChatCodeGen');
 const { activateCommentToCode } = require('./src/commentToCode');
+const {activateTempArea} = require('./src/TempArea');
 const { deactivateCodeCompletion } = require('./src/codeCompletion');
 const { deactivateAiChatCodeGen } = require('./src/aiChatCodeGen');
 const { deactivateCommentToCode } = require('./src/commentToCode');
+
 
 function activate(context) {
   context.subscriptions.push(
@@ -22,6 +24,7 @@ function activate(context) {
       }
     })
   );
+  activateTempArea(context);
   activateCodeCompletion(context);
   activateCommentToCode(context);
   let disposable = vscode.commands.registerCommand("navicode.openChat", () => {
