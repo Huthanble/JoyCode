@@ -3,13 +3,11 @@ const { OpenAI } = require('openai');
 const path = require('path');
 const { execSync } = require('child_process');
 const fs = require('fs');
+const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
 
-// 配置 DeepSeek API
-const openai = new OpenAI({
-  baseURL: 'https://api.deepseek.com/beta',
-  apiKey: 'sk-601be33605994e94a9598bc0794c1900'
-});
 
+const openai=getOpenAIInstance();
+const model = getSelectedModel();
 // 用于显示加载提示的装饰器
 let loadingDecorationType = null;
 // 标记是否由命令手动触发
@@ -144,7 +142,7 @@ async function getSuggestion(document, position) {
 
     //纯粹代码前缀版本
     const response = await openai.completions.create({
-      model: 'deepseek-chat',
+      model: model,
       prompt: prompt,
       suffix: suffix,
       max_tokens: 200,
