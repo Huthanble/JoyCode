@@ -143,6 +143,7 @@
   },
   "dependencies": {
     "axios": "^0.27.2",
+    "dotenv": "^16.5.0",
     "openai": "^4.90.0"
   }
 }
