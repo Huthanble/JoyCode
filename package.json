@@ -67,6 +67,16 @@
           "type": "number",
           "default": 20000,
           "description": "变更README的最大字符数限制。"
+        },
+        "navicode.selectedModel": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "description": "选择当前使用的 AI 模型",
+          "enum": [
+            "deepseek-chat",
+            "gpt-4",
+            "gpt-3.5"
+          ]
         }
       }
     },
@@ -92,6 +102,18 @@
         "title": "将注释转换为代码"
       },
       {
+        "command": "extension.codeFromTempArea",
+        "title": "用临时可视化区域产生代码"
+      },
+      {
+        "command": "extension.addToTempArea",
+        "title": "加入临时可视化区域"
+      },
+      {
+        "command": "extension.showTempArea",
+        "title": "显示临时可视化区域"
+      },
+      {
         "command": "navicode.editCustomPrompt",
         "title": "NaviCode: 编辑代码补全提示词"
       },
@@ -106,6 +128,10 @@
       {
         "command": "navicode.toggleReadme",
         "title": "NaviCode: 切换README读取功能"
+      },
+      {
+        "command": "navicode.switchModel",
+        "title": "切换 AI 模型"
       }
     ],
     "keybindings": [
@@ -122,6 +148,18 @@
           "command": "extension.commentToCode",
           "when": "editorHasSelection",
           "group": "navigation"
+        },
+        {
+          "command": "extension.addToTempArea",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "extension.codeFromTempArea",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "extension.showTempArea",
+          "when": "editorHasSelection"
         }
       ]
     }

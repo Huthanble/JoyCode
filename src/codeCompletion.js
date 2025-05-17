@@ -3,13 +3,11 @@ const { OpenAI } = require('openai');
 const path = require('path');
 const { execSync } = require('child_process');
 const fs = require('fs');
+const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
 
-// 配置 DeepSeek API
-const openai = new OpenAI({
-  baseURL: 'https://api.deepseek.com/beta',
-  apiKey: 'sk-601be33605994e94a9598bc0794c1900'
-});
 
+const openai=getOpenAIInstance();
+const model = getSelectedModel();
 // 用于显示加载提示的装饰器
 let loadingDecorationType = null;
 // 标记是否由命令手动触发
@@ -141,16 +139,28 @@ async function getSuggestion(document, position) {
     console.log("文件上下文开关：",vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', true))
     console.log("Git变更历史开关：",vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true))
     console.log("查询README开关：",vscode.workspace.getConfiguration('navicode').get('enableReadme', true))
-    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
 
+    //纯粹代码前缀版本
+    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",prompt);
     const response = await openai.completions.create({
-      model: 'deepseek-chat',
-      prompt: promptWithContext,
+      model: model,
+      prompt: prompt,
       suffix: suffix,
       max_tokens: 200,
       temperature: 0.5,
       stop: ['\n\n']
     });
+    
+    // console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
+    // const response = await openai.completions.create({
+    //   model: 'deepseek-chat',
+    //   prompt: promptWithContext,
+    //   suffix: suffix,
+    //   max_tokens: 200,
+    //   temperature: 0.5,
+    //   stop: ['\n\n']
+    // });
+    
     return response.choices[0].text.trim();
   } catch (error) {
     console.error('调用 DeepSeek API 出错:', error);
