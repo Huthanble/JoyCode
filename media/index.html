@@ -277,7 +277,7 @@
         <div id="messages">
             <div id="welcome-message" class="message ai"></div>
         </div>
-        <div id="status" style="text-align: center; font-size: 12px; color: gray; display: none;">正在等待AI回复...</div>
+        <!-- <div id="status" style="text-align: center; font-size: 12px; color: gray; display: none;">正在等待AI回复...</div> -->
         <div id="input-container">
             
             <div id="file-container">
@@ -361,7 +361,7 @@
             }
 
             if (message.command === 'response') {
-                hideStatus(); // 隐藏状态
+                // hideStatus(); // 隐藏状态
                 appendMessage('ai', message.text, true,messagesDiv.children.length); // 渲染 Markdown
             }
 
@@ -397,8 +397,8 @@
                 appendMessage('user', text);
                 vscode.postMessage({ command: 'askAI', text });
                 input.value = '';
-                showStatus('正在等待AI回复...'); // 显示状态
-
+                // showStatus('正在等待AI回复...'); // 显示状态
+                appendMessage('ai', '<span style="color:gray;font-size:18px;font-weight:bold;">正在等待AI回复...</span>');
                 sendButton.disabled = true; // 禁用发送按钮
                 sendButton.style.cursor = 'not-allowed'; // 更改鼠标样式
                 sendButton.style.opacity = '0.5'; // 更改按钮透明度
@@ -448,7 +448,11 @@
 
             // 将消息容器添加到消息列表
             messagesDiv.appendChild(messageDiv);
-            
+            if (sender === 'ai' && text.includes('正在等待AI回复')) {
+                contentDiv.innerHTML = text;
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                return;
+            }
             // 如果是AI消息且需要逐字显示
             if (sender === 'ai') {
                 let index = 0;
@@ -568,14 +572,14 @@ function processCodeBlocks(container) {
     });
 }
        
-        function showStatus(text) {
-        statusDiv.textContent = text;
-        statusDiv.style.display = 'block';
-    }
+    //     function showStatus(text) {
+    //     statusDiv.textContent = text;
+    //     statusDiv.style.display = 'block';
+    // }
 
-    function hideStatus() {
-        statusDiv.style.display = 'none';
-    }
+    // function hideStatus() {
+    //     statusDiv.style.display = 'none';
+    // }
 
     function typeWelcomeMessage(text, containerId) {
         const container = document.getElementById(containerId);
