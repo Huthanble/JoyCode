@@ -83,15 +83,48 @@
             "gpt-3.5"
           ]
         },
-        "navicode.promptTemplate": {
-        "type": "string",
-        "default": "/* 用户提示 */\n{{customPrompt}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}",
-        "description": "用户自定义全局提示词模板"
+        "navicode.templates": {
+          "type": "array",
+          "default": [
+            {
+              "id": "default",
+              "name": "默认模板",
+              "template": " /* 用户提示 */\n{{customPrompt}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}"
+            },
+            {
+              "id": "js_class",
+              "name": "JS 类模板",
+              "template": "/* JavaScript 类 */\nclass {{className}} {\n  constructor() {\n    {{customPrompt}}\n  }\n}\n"
+            },
+            {
+              "id": "py_module",
+              "name": "Python 模块模板",
+              "template": "# -*- coding: utf-8 -*-\n\"\"\"\n模块：{{fileName}}\n\"\"\"\n\n{{customPrompt}}\n\nif __name__ == \"__main__\":\n    pass\n"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "模板唯一标识"
+              },
+              "name": {
+                "type": "string",
+                "description": "模板名称，供下拉列表显示"
+              },
+              "template": {
+                "type": "string",
+                "description": "Prompt 提示词内容"
+              }
+            }
+          },
+          "description": "可管理的多个 Prompt 模板列表"
         },
-        "navicode.promptdefault": {
-        "type": "string",
-        "default": "/* 用户提示 */\n{{customPrompt}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}",
-        "description": "用户自定义全局提示词的默认模板"
+        "navicode.activeTemplate": {
+          "type": "string",
+          "default": "default",
+          "description": "当前激活的模板 ID"
         }
 
       }

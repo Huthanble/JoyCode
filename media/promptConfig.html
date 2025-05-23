@@ -11,8 +11,8 @@
   </style>
 </head>
 <body>
-  <h2>配置全局 Prompt 模板</h2>
-  <p>使用以下占位符：</p>
+  <h2>Prompt 模板管理</h2>
+  <p>可选用以下占位符：</p>
   <ul>
     <li><code>{{customPrompt}} ：用户提示词</code></li>
     <li><code>{{readme}} ：项目仓库readme</code></li>
@@ -20,37 +20,219 @@
     <li><code>{{#each relatedFiles}}…{{/each}} ：逐个读取关联文件</code></li>
     <li><code>{{fileName}} ：当前文件的名称</code></li>
     <li><code>{{languageId}} ：当前文件所用的编程语言</code></li>
-    <li><code>{{#if includeReadme}} ：是否需要readme内容(if的判断与相关功能的开关挂钩)</code></li>
-    <li><code>{{#if includeDiff}} ：是否需要diff内容(if的判断与相关功能的开关挂钩)</code></li>
-    <li><code>{{#if includeRelatedFiles}} ：是否需要关联文件内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{#if includeReadme}}...{{/if}} ：是否需要readme内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{#if includeDiff}}..{{/if}} ：是否需要diff内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{#if includeRelatedFiles}}..{{/if}} ：是否需要关联文件内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{this.path}} ：关联文件的路径</code></li>
+    <li><code>{{this.content}} ：关联文件的内容</code></li>
     <li><code>{{prefix}} ：前文代码</code></li>
   </ul>
+  <!-- 模板切换下拉框 -->
+  <label>选择模板：
+    <select id="tplSelect"></select>
+  </label>
+  <button id="addBtn">新建模板</button>
+  <button id="delBtn">删除模板</button>
+  <button id="resetBtn">恢复默认内容</button>
+
+  <hr/>
+
   <textarea id="promptTemplate"></textarea>
   <br/>
   <button id="saveBtn">保存</button>
-  <button id="resetBtn">恢复默认</button>  <!-- 新增按钮 -->
 
+  <!-- 创建框提示 -->
+  <div id="modalOverlay" style="
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+">
+  <div id="nameModal" style="
+    background: #ffffff;
+    border-radius: 8px;
+    width: 320px;
+    max-width: 80%;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    font-family: sans-serif;
+  ">
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 1.2em; color: #333;">
+      新建模板
+    </h3>
+    <label style="display: block; margin-bottom: 12px; color: #555;">
+      模板名称：
+      <input id="newName" type="text" placeholder="请输入名称" style="
+        width: 100%;
+        padding: 8px;
+        margin-top: 4px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 1em;
+      "/>
+    </label>
+    <div style="text-align: right; margin-top: 16px;">
+      <button id="cancel" style="
+        background: transparent;
+        border: none;
+        color: #888;
+        font-size: 0.9em;
+        padding: 8px 12px;
+        margin-right: 8px;
+        cursor: pointer;
+      ">取消</button>
+      <button id="ok" style="
+        background: #007acc;
+        border: none;
+        color: white;
+        font-size: 0.9em;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+      ">确定</button>
+    </div>
+  </div>
+</div>
+  <!-- 删除提示： -->
+  <div id="confirmModal" style="display:none; position:fixed; /* ...样式... */">
+    <p>确定要删除模板「<span id="tplName"></span>」吗？</p>
+    <button id="modalYes">确定</button>
+    <button id="modalNo">取消</button>
+  </div>
   <script>
     const vscode = acquireVsCodeApi();
+    let currentTemplates = [];
+    let currentActiveId = '';
 
-    // 接收扩展消息
+    // 初始化：接受所有模板和激活 id
     window.addEventListener('message', event => {
-      const message = event.data;
-      if (message.command === 'init') {
-        document.getElementById('promptTemplate').value = message.template;
+      const msg = event.data;
+      if (msg.command === 'init') {
+        // 每个模板对象里已经带了 isBuiltIn 字段
+        currentTemplates = msg.templates;
+        currentActiveId = msg.activeId;
+        renderTemplateList();
+        fillTextarea();
       }
     });
 
-    // 保存
-    document.getElementById('saveBtn').addEventListener('click', () => {
-      const newTpl = document.getElementById('promptTemplate').value;
-      vscode.postMessage({ command: 'save', template: newTpl });
+    // 渲染下拉列表
+    function renderTemplateList() {
+      const sel = document.getElementById('tplSelect');
+      sel.innerHTML = '';
+      currentTemplates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.text = t.name + (t.isBuiltIn ? ' (内置)' : '');
+        if (t.id === currentActiveId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+
+      // 根据当前选中项，控制按钮状态
+      const cur = currentTemplates.find(t => t.id === currentActiveId);
+      document.getElementById('delBtn').disabled = cur.isBuiltIn;
+      // reset 按钮对所有模板都可用，内置模板会在扩展端恢复到原始内容
+      document.getElementById('resetBtn').disabled = false;
+    }
+
+    // 根据 currentActiveId 填充 textarea
+    function fillTextarea() {
+      const tpl = currentTemplates.find(t => t.id === currentActiveId);
+      document.getElementById('promptTemplate').value = tpl ? tpl.template : '';
+    }
+
+    // 模板切换
+    document.getElementById('tplSelect').addEventListener('change', e => {
+      const newId = e.target.value;
+      vscode.postMessage({ command: 'switch', id: newId });
     });
 
-    // 恢复默认
+      // 保存
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const tpl = currentTemplates.find(t => t.id === currentActiveId);
+      vscode.postMessage({
+        command: 'save',
+        id: tpl.id,
+        name: tpl.name,
+        template: document.getElementById('promptTemplate').value
+      });
+    });
+
+    // 重置
     document.getElementById('resetBtn').addEventListener('click', () => {
-      vscode.postMessage({ command: 'reset' });
+      const tpl = currentTemplates.find(t => t.id === currentActiveId);
+      vscode.postMessage({
+        command: 'reset',
+        id: tpl.id,
+        name: tpl.name
+      });
+    });
+
+  </script>
+
+  <script>
+    //创建
+    const overlay = document.getElementById('modalOverlay');
+    const okBtn = document.getElementById('ok');
+    const cancelBtn = document.getElementById('cancel');
+    const newNameInput = document.getElementById('newName');
+
+    // 显示弹窗
+    function showModal() {
+      newNameInput.value = '';
+      overlay.style.display = 'flex';
+      newNameInput.focus();
+    }
+
+    // 隐藏弹窗
+    function hideModal() {
+      overlay.style.display = 'none';
+    }
+
+    // 绑定“新建”按钮
+    document.getElementById('addBtn').addEventListener('click', showModal);
+
+    // 确认
+    okBtn.addEventListener('click', () => {
+      const name = newNameInput.value.trim();
+      if (name) {
+        vscode.postMessage({ command:'add', name, template:'' });
+        hideModal();
+      } else {
+        // 可以加一个简单的校验提示
+        newNameInput.style.borderColor = 'red';
+        newNameInput.placeholder = '名称不能为空';
+      }
+    });
+
+    // 取消
+    cancelBtn.addEventListener('click', hideModal);
+
+    // 点击遮罩区域也可关闭
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) hideModal();
+    });
+  </script>
+  <script>
+    //删除
+    const modal2 = document.getElementById('confirmModal');
+    const tplNameSpan = document.getElementById('tplName');
+    document.getElementById('delBtn').addEventListener('click', () => {
+      const tpl = currentTemplates.find(t => t.id === currentActiveId);
+      tplNameSpan.textContent = tpl.name;
+      modal2.style.display = 'block';
+    });
+    document.getElementById('modalYes').addEventListener('click', () => {
+      vscode.postMessage({ command:'delete', id: currentActiveId, name: tplNameSpan.textContent });
+      modal2.style.display = 'none';
+    });
+    document.getElementById('modalNo').addEventListener('click', () => {
+      modal2.style.display = 'none';
     });
   </script>
 </body>
+
 </html>
