@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Prompt 模板配置</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    textarea { width: 100%; height: 300px; font-family: monospace; }
+    button { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h2>配置全局 Prompt 模板</h2>
+  <p>使用以下占位符：</p>
+  <ul>
+    <li><code>{{customPrompt}} ：用户提示词</code></li>
+    <li><code>{{readme}} ：项目仓库readme</code></li>
+    <li><code>{{fileDiff}} ：当前文件未提交的更改与最新提交之间的差异</code></li>
+    <li><code>{{#each relatedFiles}}…{{/each}} ：逐个读取关联文件</code></li>
+    <li><code>{{fileName}} ：当前文件的名称</code></li>
+    <li><code>{{languageId}} ：当前文件所用的编程语言</code></li>
+    <li><code>{{#if includeReadme}} ：是否需要readme内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{#if includeDiff}} ：是否需要diff内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{#if includeRelatedFiles}} ：是否需要关联文件内容(if的判断与相关功能的开关挂钩)</code></li>
+    <li><code>{{prefix}} ：前文代码</code></li>
+  </ul>
+  <textarea id="promptTemplate"></textarea>
+  <br/>
+  <button id="saveBtn">保存</button>
+  <button id="resetBtn">恢复默认</button>  <!-- 新增按钮 -->
+
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    // 接收扩展消息
+    window.addEventListener('message', event => {
+      const message = event.data;
+      if (message.command === 'init') {
+        document.getElementById('promptTemplate').value = message.template;
+      }
+    });
+
+    // 保存
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const newTpl = document.getElementById('promptTemplate').value;
+      vscode.postMessage({ command: 'save', template: newTpl });
+    });
+
+    // 恢复默认
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'reset' });
+    });
+  </script>
+</body>
+</html>

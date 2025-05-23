@@ -4,6 +4,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
+const Handlebars = require('handlebars');
 
 
 const openai=getOpenAIInstance();
@@ -91,77 +92,99 @@ async function getSuggestion(document, position) {
   }
 
   try {
-    // 构建包含自定义提示词的上下文
-    let promptWithContext = '';
+    // 在 getSuggestion 开头，读取用户模板
+    const tplString = vscode.workspace.getConfiguration('navicode').get('promptTemplate', '');
+    const template = Handlebars.compile(tplString);
 
-    promptWithContext += 
-        `/*这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:*/\n${customPrompt}\n\n`;
+    const vars = {
+      customPrompt,
+      fileName: path.basename(document.fileName),
+      languageId: document.languageId,
+      prefix: prompt,
+      includeReadme: Boolean(readme.content),
+      readme: readme.content,
+      includeDiff: Boolean(fileDiff.diff),
+      fileDiff: fileDiff.diff,
+      includeRelatedFiles: relatedFiles.files.length > 0,
+      relatedFiles: relatedFiles.files,
+    };
 
-    // 如果有 README
-    if (readme.content) {
-      promptWithContext += "/*这一部分是用户github仓库中的README*/\n";
-      promptWithContext += "```\n" + readme.content + "\n```\n";
-      if (readme.truncated) {
-        promptWithContext += "注意：README 内容因长度限制被截断。\n";
-      }
-      promptWithContext += "\n";
-    }
+  const promptWithContext = template(vars);
 
-    // 当前文件的改动 diff(尚未测试)
-    if (fileDiff.diff) {
-      promptWithContext += '/*当前未提交/未合并到最新提交的变更(git diff)*/\n';
-      promptWithContext += '```diff\n' + fileDiff.diff + '\n```\n';
-      if (fileDiff.truncated) promptWithContext += '注意:diff 因长度限制被截断。\n';
-      promptWithContext += '\n';
-    }
+    // // 构建包含自定义提示词的上下文
+    // let promptWithContext = '';
 
-    // 添加关联文件内容（这部分的代码正确性没有测试，如果有问题直接注释掉）
-    if (relatedFiles.files.length > 0) {
-      promptWithContext += "/*这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：*/\n";
+    // promptWithContext += 
+    //     `/*这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:*/\n${customPrompt}\n\n`;
+
+    // // 如果有 README
+    // if (readme.content) {
+    //   promptWithContext += "/*这一部分是用户github仓库中的README*/\n";
+    //   promptWithContext += "```\n" + readme.content + "\n```\n";
+    //   if (readme.truncated) {
+    //     promptWithContext += "注意：README 内容因长度限制被截断。\n";
+    //   }
+    //   promptWithContext += "\n";
+    // }
+
+    // // 当前文件的改动 diff(尚未测试)
+    // if (fileDiff.diff) {
+    //   promptWithContext += '/*当前未提交/未合并到最新提交的变更(git diff)*/\n';
+    //   promptWithContext += '```diff\n' + fileDiff.diff + '\n```\n';
+    //   if (fileDiff.truncated) promptWithContext += '注意:diff 因长度限制被截断。\n';
+    //   promptWithContext += '\n';
+    // }
+
+    // // 添加关联文件内容（这部分的代码正确性没有测试，如果有问题直接注释掉）
+    // if (relatedFiles.files.length > 0) {
+    //   promptWithContext += "/*这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：*/\n";
       
-      for (const file of relatedFiles.files) {
-        const fileName = path.basename(file.path);
-        promptWithContext += `文件: ${fileName}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
-      }
+    //   for (const file of relatedFiles.files) {
+    //     const fileName = path.basename(file.path);
+    //     promptWithContext += `文件: ${fileName}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+    //   }
       
-      if (relatedFiles.truncated) {
-        promptWithContext += `注意: ${relatedFiles.message}\n\n`;
-      }
-    }
+    //   if (relatedFiles.truncated) {
+    //     promptWithContext += `注意: ${relatedFiles.message}\n\n`;
+    //   }
+    // }
 
-    promptWithContext +=
-        `/*代码上下文*/\n` +
-        `文件: ${document.fileName}\n` +
-        `语言: ${document.languageId}\n` +
-        `前缀代码:\n${prompt}\n\n`;
+    // promptWithContext +=
+    //     `/*代码上下文*/\n` +
+    //     `文件: ${document.fileName}\n` +
+    //     `语言: ${document.languageId}\n` +
+    //     `前缀代码:\n${prompt}\n\n`;
     
     console.log("自动代码补全开关：",vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true))
     console.log("文件上下文开关：",vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', true))
     console.log("Git变更历史开关：",vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true))
     console.log("查询README开关：",vscode.workspace.getConfiguration('navicode').get('enableReadme', true))
+    console.log("查询纯净模式开关：",vscode.workspace.getConfiguration('navicode').get('enablePurity', true))
 
-    //纯粹代码前缀版本
-    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",prompt);
-    const response = await openai.completions.create({
-      model: model,
-      prompt: prompt,
-      suffix: suffix,
-      max_tokens: 200,
-      temperature: 0.5,
-      stop: ['\n\n']
-    });
-    
-    // console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
-    // const response = await openai.completions.create({
-    //   model: 'deepseek-chat',
-    //   prompt: promptWithContext,
-    //   suffix: suffix,
-    //   max_tokens: 200,
-    //   temperature: 0.5,
-    //   stop: ['\n\n']
-    // });
-    
-    return response.choices[0].text.trim();
+    if(isPurittyEnabled()){
+        //纯粹代码前缀版本
+        console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",prompt);
+        const response = await openai.completions.create({
+        model: model,
+        prompt: prompt,
+        suffix: suffix,
+        max_tokens: 200,
+        temperature: 0.5,
+        stop: ['\n\n']
+      });
+      return response.choices[0].text.trim();
+    }else{
+      console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
+      const response = await openai.completions.create({
+        model: 'deepseek-chat',
+        prompt: promptWithContext,
+        suffix: suffix,
+        max_tokens: 200,
+        temperature: 0.5,
+        stop: ['\n\n']
+      });
+      return response.choices[0].text.trim();
+    }
   } catch (error) {
     console.error('调用 DeepSeek API 出错:', error);
     return null;
@@ -282,6 +305,14 @@ function isAutoTriggerEnabled() {
 function isRelatedFilesEnabled() {
   return vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', false);
 }
+
+/**
+ * 检查是否启用纯净模式
+ */
+function isPurittyEnabled() {
+  return vscode.workspace.getConfiguration('navicode').get('enablePurity', false);
+}
+
 
 /**
  * 提取文件中的导入语句并解析出文件路径
@@ -636,12 +667,21 @@ function activateCodeCompletion(context) {
     })
   );
 
+  // 注册纯净模式的开关命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand('navicode.togglePurity', async () => {
+      const currentValue = isPurittyEnabled();
+      await vscode.workspace.getConfiguration('navicode').update('enablePurity', !currentValue, true);
+      vscode.window.showInformationMessage(`纯净模式已${!currentValue ? '启用' : '禁用'}`);
+    })
+  );
+
   // 注册编辑提示词命令
   context.subscriptions.push(
     vscode.commands.registerCommand('navicode.editCustomPrompt', async () => {
       const config = vscode.workspace.getConfiguration('navicode');
       const currentPrompt = config.get('customPrompt', '');
-      
+
       const newPrompt = await vscode.window.showInputBox({
         value: currentPrompt,
         prompt: '编辑代码补全提示词',
@@ -661,6 +701,52 @@ function activateCodeCompletion(context) {
       }
     })
   );
+
+  //用户打开自定义模板的功能注册
+  context.subscriptions.push(
+    vscode.commands.registerCommand('navicode.configureTemplate', async () => {
+      const panel = vscode.window.createWebviewPanel(
+        'navicodeTemplateConfig',
+        'Prompt 模板配置',
+        vscode.ViewColumn.One,
+        { enableScripts: true, localResourceRoots: [ /* … */ ] }
+      );
+
+      // 读取 HTML 并替换 baseUri
+      const htmlPath = path.join(context.extensionPath, 'media', 'promptConfig.html');
+      let html = fs.readFileSync(htmlPath, 'utf8')
+        .replace(/%BASE_URI%/g, panel.webview.asWebviewUri(
+          vscode.Uri.file(path.join(context.extensionPath, 'media'))
+        ).toString());
+      panel.webview.html = html;
+
+      // 从配置里拿当前模板
+      const config = vscode.workspace.getConfiguration('navicode');
+      const currentTpl = config.get('promptTemplate', '');
+      // 也要能拿到“默认模板”内容
+      const defaultTpl = config.get('promptdefault', '');
+
+      // 监听前端消息
+      panel.webview.onDidReceiveMessage(async message => {
+        if (message.command === 'save') {
+          await config.update('promptTemplate', message.template, true);
+          vscode.window.showInformationMessage('Prompt 模板已保存');
+        }
+        else if (message.command === 'reset') {
+          // 重置到默认
+          await config.update('promptTemplate', defaultTpl, true);
+          // 把默认模板再发回给前端 textarea
+          panel.webview.postMessage({ command: 'init', template: defaultTpl });
+          vscode.window.showInformationMessage('已恢复为默认模板');
+        }
+      });
+
+      // 首次打开，初始化 textarea
+      panel.webview.postMessage({ command: 'init', template: currentTpl });
+    })
+  );
+
+
 }
 
 /**
