@@ -12,7 +12,9 @@ function detectLanguage(code, languageId) {
 }
 
 function stripMarkdown(code) {
-  return code.replace(/```[a-zA-Z]*\n?|```/g, '').trim();
+  return code.replace(/^[：:]+/gm, '') // 新增：去除每行开头的全角/半角冒号
+             .replace(/```[a-zA-Z]*\n?|```/g, '')
+             .trim();
 }
 
 function getTempFilePath(lang) {
@@ -25,12 +27,36 @@ function getTempFilePath(lang) {
     default: return `${base}.txt`;
   }
 }
+//检查补全的代码是否为函数
+function wrapCppFunctionForTest(code) {
+  // 检查是否有 main 函数
+  if (/int\s+main\s*\(/.test(code)) return code;
+
+  // 简单提取函数名和参数
+  const match = code.match(/(\w+)\s+(\w+)\s*\(([^)]*)\)/);
+  if (!match) return code; // 不是函数，直接返回
+
+  const funcName = match[2];
+  const params = match[3].split(',').map(p => p.trim().split(' ')[1] || '0').join(', ');
+
+  // 生成 main 测试代码
+  const testMain = `
+    int main() {
+        auto result = ${funcName}(${params});
+        std::cout << "Test result: " << result << std::endl;
+        return 0;
+    }
+  `;
+
+  return code + '\n' + testMain;
+}
 
 function runCode(lang, code) {
   return new Promise((resolve) => {
     const cleanedCode = stripMarkdown(code);
+    const recleanedCode = wrapCppFunctionForTest(cleanedCode);
     const filePath = getTempFilePath(lang);
-    fs.writeFileSync(filePath, cleanedCode);
+    fs.writeFileSync(filePath, recleanedCode);
 
     let command = '';
     switch (lang) {
@@ -41,7 +67,8 @@ function runCode(lang, code) {
         command = `node ${filePath}`;
         break;
       case 'cpp':
-        command = `g++ ${filePath} -o ${filePath}.out && ${filePath}.out`;
+        const exePath = `${filePath}.exe`;
+        command = `g++ "${filePath}" -o "${exePath}" && echo 1 2 |"${exePath}"`;
         break;
       case 'java':
         command = `javac ${filePath} && java -cp ${path.dirname(filePath)} ${path.basename(filePath).replace('.java', '')}`;
@@ -51,7 +78,10 @@ function runCode(lang, code) {
     }
 
     exec(command, (error, stdout, stderr) => {
-      if (error || stderr) {
+      console.log('error:', error);
+      console.log('stdout:', stdout);
+      console.log('stderr:', stderr);
+      if (error && error.code !== 0) {
         resolve({ success: false, message: stderr || error.message });
       } else {
         resolve({ success: true, message: stdout });
