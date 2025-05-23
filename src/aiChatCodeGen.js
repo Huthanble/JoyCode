@@ -113,7 +113,15 @@ function activateAiChatCodeGen(context) {
 
     // 监听前端发送的消息
     panel.webview.onDidReceiveMessage(async (message) => {
-        
+
+        if (message.command === 'removeContextFile') {
+            contextFiles = contextFiles.filter(f => f.filePath !== message.filePath);
+            console.log(contextFiles, message.filePath);
+            panel.webview.postMessage({
+                command: 'contextFiles',
+                files: contextFiles
+            });
+        }
         if(message.command==='insertCode'){
             const editor = vscode.window.activeTextEditor;
             if (editor) {
@@ -147,15 +155,13 @@ function activateAiChatCodeGen(context) {
             const fileName = path.basename(filePath);
             let fileContent = '';
             try {
-                fileContent = fs.readFileSync(filePath, 'utf-8');
-                // 保存到 contextFiles
-                contextFiles.push({ fileName, filePath, fileContent });
-                // 你可以把文件名发回前端显示
-                panel.webview.postMessage({
-                    command: 'contextFileAdded',
-                    fileName,
-                    filePath
-                });
+            fileContent = fs.readFileSync(filePath, 'utf-8');
+            contextFiles.push({ fileName, filePath, fileContent });
+            // 发完整列表给前端
+            panel.webview.postMessage({
+                command: 'contextFiles',
+                files: contextFiles
+            });
             } catch (err) {
                 vscode.window.showErrorMessage('读取文件失败: ' + err.message);
             }

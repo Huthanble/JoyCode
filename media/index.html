@@ -284,7 +284,8 @@
                 <button id="add-context-btn" title="添加上下文文件" style="border:none;background:transparent;cursor:pointer;">
                 <i class="fas fa-link" style="color:white;"></i>
                 </button>
-                 <div id="file-info" style="font-size:12px;display:flex;align-items:center;"></div>
+                <div id="file-info" style="font-size:12px;display:flex;align-items:center;"></div>
+                <div id="context-files-list" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
                 </div>
             <div class="input-row" style="position: relative;">
                 
@@ -310,7 +311,7 @@
         const sendButton = document.getElementById('send');
         sendButton.addEventListener('click', sendMessage);
         const statusDiv=document.getElementById('status');
-        
+        let contextFiles = []; // 存储上下文文件
         // 在插件加载时显示欢迎消息
         window.addEventListener('DOMContentLoaded', () => {
             typeWelcomeMessage('欢迎使用navicode！', 'welcome-message');
@@ -367,7 +368,12 @@
             sendButton.disabled = false; // 启用发送按钮
             sendButton.style.cursor = 'pointer'; // 恢复鼠标样式
             sendButton.style.opacity = '1'; // 恢复按钮透明度
-        
+            
+            if (message.command === 'contextFiles') {
+                // message.files 是后端传来的上下文文件数组
+                contextFiles = message.files;
+                renderContextFiles();
+            }
             
         });
         //给输入框绑定监听，这样只有当用户在输入框中按下回车时，才会执行 sendMessage()
@@ -587,6 +593,41 @@ function processCodeBlocks(container) {
         type();
     }
     
+
+// 渲染上下文文件列表
+function renderContextFiles() {
+    const listDiv = document.getElementById('context-files-list');
+    listDiv.innerHTML = '';
+    contextFiles.forEach((file, idx) => {
+        const fileDiv = document.createElement('div');
+        fileDiv.style.display = 'flex';
+        fileDiv.style.alignItems = 'center';
+        fileDiv.style.background = '#222';
+        fileDiv.style.color = '#fff';
+        fileDiv.style.borderRadius = '4px';
+        fileDiv.style.padding = '2px 8px';
+        fileDiv.style.fontSize = '12px';
+        fileDiv.style.marginRight = '4px';
+
+        fileDiv.innerHTML = `<i class="fas fa-file-alt" style="margin-right:4px;"></i>${file.fileName}`;
+
+        // 删除按钮
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '<i class="fas fa-times"></i>';
+        delBtn.style.background = 'transparent';
+        delBtn.style.border = 'none';
+        delBtn.style.color = '#fff';
+        delBtn.style.cursor = 'pointer';
+        delBtn.style.marginLeft = '4px';
+        delBtn.onclick = () => {
+            
+            // 通知后端同步删除
+            vscode.postMessage({ command: 'removeContextFile', filePath: file.filePath });
+        };
+        fileDiv.appendChild(delBtn);
+        listDiv.appendChild(fileDiv);
+    });
+}
     </script>
   <button id="scroll-bottom-btn" title="滚动到底部" style="
     position: fixed;
