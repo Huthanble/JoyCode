@@ -1,12 +1,12 @@
-const vscode = require('vscode');
-const { OpenAI } = require('openai');
-const path = require('path');
-const { execSync } = require('child_process');
-const fs = require('fs');
-const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
+const vscode = require("vscode");
+const { OpenAI } = require("openai");
+const path = require("path");
+const { execSync } = require("child_process");
+const fs = require("fs");
+const { getOpenAIInstance, getSelectedModel } = require("./openaiClient");
+const Handlebars = require("handlebars");
 
-
-const openai=getOpenAIInstance();
+const openai = getOpenAIInstance();
 const model = getSelectedModel();
 // 用于显示加载提示的装饰器
 let loadingDecorationType = null;
@@ -19,19 +19,19 @@ let isManuallyTriggered = false;
  */
 function showLoadingIndicator(editor) {
   if (!editor) return;
-  
+
   // 清除之前的加载提示
   hideLoadingIndicator();
-  
+
   // 创建新的装饰类型
   loadingDecorationType = vscode.window.createTextEditorDecorationType({
     after: {
-      contentText: '代码生成中...',
-      color: '#888888',
-      fontStyle: 'italic'
-    }
+      contentText: "代码生成中...",
+      color: "#888888",
+      fontStyle: "italic",
+    },
   });
-  
+
   // 在光标位置显示加载提示
   const position = editor.selection.active;
   const range = new vscode.Range(position, position);
@@ -44,7 +44,7 @@ function showLoadingIndicator(editor) {
 function hideLoadingIndicator() {
   if (loadingDecorationType) {
     // 获取所有编辑器
-    vscode.window.visibleTextEditors.forEach(editor => {
+    vscode.window.visibleTextEditors.forEach((editor) => {
       editor.setDecorations(loadingDecorationType, []);
     });
     loadingDecorationType.dispose();
@@ -63,7 +63,7 @@ async function getSuggestion(document, position) {
   const cursorOffset = document.offsetAt(position);
   const prompt = fullText.slice(0, cursorOffset);
   const suffix = fullText.slice(cursorOffset);
-  
+
   // 获取用户自定义提示词
   const customPrompt = getCustomPrompt(document);
 
@@ -78,102 +78,124 @@ async function getSuggestion(document, position) {
 
   // 如果文件大小超出限制，显示提示
   if (relatedFiles.truncated) {
-    vscode.window.showWarningMessage(
-      "相关文件长度过长，相关文件内容会被截取，请考虑是否要关闭相关文件功能", 
-      "关闭相关文件功能", 
-      "继续"
-    ).then(selection => {
-      if (selection === "关闭相关文件功能") {
-        vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', false, true);
-        vscode.window.showInformationMessage("已关闭相关文件功能");
-      }
-    });
+    vscode.window
+      .showWarningMessage(
+        "相关文件长度过长，相关文件内容会被截取，请考虑是否要关闭相关文件功能",
+        "关闭相关文件功能",
+        "继续"
+      )
+      .then((selection) => {
+        if (selection === "关闭相关文件功能") {
+          vscode.workspace
+            .getConfiguration("navicode")
+            .update("enableRelatedFiles", false, true);
+          vscode.window.showInformationMessage("已关闭相关文件功能");
+        }
+      });
   }
 
   try {
-    // 构建包含自定义提示词的上下文
-    let promptWithContext = '';
+    // 在 getSuggestion 开头，读取用户模板
+    const config = vscode.workspace.getConfiguration("navicode");
+    // 所有模板数组
+    const templates = config.get("templates", []);
+    // 当前激活模板 ID
+    const activeId = config.get("activeTemplate", "default");
+    // 找到当前模板对象，找不到就 fallback 到第一个或默认模板
+    const activeTplObj = templates.find((t) => t.id === activeId) ||
+      templates[0] || {
+        template:
+          " /* 用户提示 */\n{{customPrompt}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}",
+      };
+    const tplString = activeTplObj.template;
+    // 用 Handlebars 编译
+    const template = Handlebars.compile(tplString, { noEscape: true });
 
-    promptWithContext += 
-        `/*这一部分是用户设定的提示词，之后生成的代码请按照以下提示词的内容来生成:*/\n${customPrompt}\n\n`;
+    const vars = {
+      customPrompt,
+      fileName: path.basename(document.fileName),
+      languageId: document.languageId,
+      prefix: prompt,
+      includeReadme: Boolean(readme.content),
+      readme: readme.content,
+      includeDiff: Boolean(fileDiff.diff),
+      fileDiff: fileDiff.diff,
+      includeRelatedFiles: relatedFiles.files.length > 0,
+      relatedFiles: relatedFiles.files,
+    };
+    const promptWithContext = template(vars);
 
-    // 如果有 README
-    if (readme.content) {
-      promptWithContext += "/*这一部分是用户github仓库中的README*/\n";
-      promptWithContext += "```\n" + readme.content + "\n```\n";
-      if (readme.truncated) {
-        promptWithContext += "注意：README 内容因长度限制被截断。\n";
-      }
-      promptWithContext += "\n";
+    console.log("当前使用模板：", activeTplObj.name);
+
+    console.log(
+      "自动代码补全开关：",
+      vscode.workspace
+        .getConfiguration("navicode")
+        .get("enableAutoTrigger", true)
+    );
+    console.log(
+      "文件上下文开关：",
+      vscode.workspace
+        .getConfiguration("navicode")
+        .get("enableRelatedFiles", true)
+    );
+    console.log(
+      "Git变更历史开关：",
+      vscode.workspace.getConfiguration("navicode").get("enableGitDiff", true)
+    );
+    console.log(
+      "查询README开关：",
+      vscode.workspace.getConfiguration("navicode").get("enableReadme", true)
+    );
+    console.log(
+      "查询纯净模式开关：",
+      vscode.workspace.getConfiguration("navicode").get("enablePurity", true)
+    );
+
+    if (isPurittyEnabled()) {
+      //纯粹代码前缀版本
+      console.log(
+        "生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",
+        prompt
+      );
+      const response = await openai.completions.create({
+        model: model,
+        prompt: prompt,
+        suffix: suffix,
+        max_tokens: 200,
+        temperature: 0.5,
+        stop: ["\n\n"],
+      });
+      return response.choices[0].text.trim();
+    } else {
+      console.log(
+        "生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",
+        promptWithContext
+      );
+      const response = await openai.completions.create({
+        model: "deepseek-chat",
+        prompt: promptWithContext,
+        suffix: suffix,
+        max_tokens: 200,
+        temperature: 0.5,
+        stop: ["\n\n"],
+      });
+      return response.choices[0].text.trim();
     }
-
-    // 当前文件的改动 diff(尚未测试)
-    if (fileDiff.diff) {
-      promptWithContext += '/*当前未提交/未合并到最新提交的变更(git diff)*/\n';
-      promptWithContext += '```diff\n' + fileDiff.diff + '\n```\n';
-      if (fileDiff.truncated) promptWithContext += '注意:diff 因长度限制被截断。\n';
-      promptWithContext += '\n';
-    }
-
-    // 添加关联文件内容（这部分的代码正确性没有测试，如果有问题直接注释掉）
-    if (relatedFiles.files.length > 0) {
-      promptWithContext += "/*这一部分是与当前代码有关的相关文件（用户在同一个项目下的其他相关文件）：*/\n";
-      
-      for (const file of relatedFiles.files) {
-        const fileName = path.basename(file.path);
-        promptWithContext += `文件: ${fileName}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
-      }
-      
-      if (relatedFiles.truncated) {
-        promptWithContext += `注意: ${relatedFiles.message}\n\n`;
-      }
-    }
-
-    promptWithContext +=
-        `/*代码上下文*/\n` +
-        `文件: ${document.fileName}\n` +
-        `语言: ${document.languageId}\n` +
-        `前缀代码:\n${prompt}\n\n`;
-    
-    console.log("自动代码补全开关：",vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true))
-    console.log("文件上下文开关：",vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', true))
-    console.log("Git变更历史开关：",vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true))
-    console.log("查询README开关：",vscode.workspace.getConfiguration('navicode').get('enableReadme', true))
-
-    //纯粹代码前缀版本
-    console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",prompt);
-    const response = await openai.completions.create({
-      model: model,
-      prompt: prompt,
-      suffix: suffix,
-      max_tokens: 200,
-      temperature: 0.5,
-      stop: ['\n\n']
-    });
-    
-    // console.log("生成的前文（提示词+README+关联文件+github仓库提交记录+当前代码）：\n",promptWithContext);
-    // const response = await openai.completions.create({
-    //   model: 'deepseek-chat',
-    //   prompt: promptWithContext,
-    //   suffix: suffix,
-    //   max_tokens: 200,
-    //   temperature: 0.5,
-    //   stop: ['\n\n']
-    // });
-    
-    return response.choices[0].text.trim();
   } catch (error) {
-    console.error('调用 DeepSeek API 出错:', error);
+    console.error("调用 DeepSeek API 出错:", error);
     return null;
   }
 }
 
 // 获取用户自定义提示词，应用模板变量
 function getCustomPrompt(document) {
-  const promptTemplate = vscode.workspace.getConfiguration('navicode').get('customPrompt', "无");
-  
+  const promptTemplate = vscode.workspace
+    .getConfiguration("navicode")
+    .get("customPrompt", "无");
+
   if (!promptTemplate) return "无";
-  
+
   return promptTemplate;
 }
 
@@ -183,7 +205,7 @@ function getCustomPrompt(document) {
 function findGitRoot(startPath) {
   let dir = startPath;
   while (dir && dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    if (fs.existsSync(path.join(dir, ".git"))) return dir;
     dir = path.dirname(dir);
   }
   return null;
@@ -193,7 +215,9 @@ function findGitRoot(startPath) {
  * 检查是否启用 README 功能
  */
 function isReadmeEnabled() {
-  return vscode.workspace.getConfiguration('navicode').get('enableReadme', true);
+  return vscode.workspace
+    .getConfiguration("navicode")
+    .get("enableReadme", true);
 }
 
 /**
@@ -201,37 +225,41 @@ function isReadmeEnabled() {
  * @returns {{ content: string, truncated: boolean }}
  */
 function getReadmeContent() {
-  if (!isReadmeEnabled()) return { content: '', truncated: false };
+  if (!isReadmeEnabled()) return { content: "", truncated: false };
 
   const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) return { content: '', truncated: false };
+  if (!workspaceFolders) return { content: "", truncated: false };
 
   const root = findGitRoot(workspaceFolders[0].uri.fsPath);
-  if (!root) return { content: '', truncated: false };
+  if (!root) return { content: "", truncated: false };
 
-  const candidates = ['README.md', 'README.markdown', 'README.txt', 'README'];
+  const candidates = ["README.md", "README.markdown", "README.txt", "README"];
   for (const name of candidates) {
     const p = path.join(root, name);
     if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-      let data = fs.readFileSync(p, 'utf8');
-      const maxSize = vscode.workspace.getConfiguration('navicode').get('maxReadmeSize', 20000);
+      let data = fs.readFileSync(p, "utf8");
+      const maxSize = vscode.workspace
+        .getConfiguration("navicode")
+        .get("maxReadmeSize", 20000);
       let truncated = false;
       if (data.length > maxSize) {
-        data = data.slice(0, maxSize) + '\n\n...（已截断）';
+        data = data.slice(0, maxSize) + "\n\n...（已截断）";
         truncated = true;
       }
       return { content: data, truncated };
     }
   }
 
-  return { content: '', truncated: false };
+  return { content: "", truncated: false };
 }
 
 /**
  * 检查是否启用 git diff 功能
  */
 function isGitDiffEnabled() {
-  return vscode.workspace.getConfiguration('navicode').get('enableGitDiff', true);
+  return vscode.workspace
+    .getConfiguration("navicode")
+    .get("enableGitDiff", true);
 }
 
 /**
@@ -240,29 +268,36 @@ function isGitDiffEnabled() {
  * @returns {{ diff: string, truncated: boolean }}
  */
 function getCurrentFileDiff(document) {
-  if (!isGitDiffEnabled()) return { diff: '', truncated: false };
+  if (!isGitDiffEnabled()) return { diff: "", truncated: false };
 
-  const maxChars = vscode.workspace.getConfiguration('navicode').get('maxDiffSize', 50000);
+  const maxChars = vscode.workspace
+    .getConfiguration("navicode")
+    .get("maxDiffSize", 50000);
   const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) return { diff: '', truncated: false };
+  if (!workspaceFolders) return { diff: "", truncated: false };
 
   const gitRoot = findGitRoot(workspaceFolders[0].uri.fsPath);
-  if (!gitRoot) return { diff: '', truncated: false };
+  if (!gitRoot) return { diff: "", truncated: false };
 
   // 相对于仓库根的文件路径
-  const relPath = path.relative(gitRoot, document.uri.fsPath).replace(/\\/g, '/');
+  const relPath = path
+    .relative(gitRoot, document.uri.fsPath)
+    .replace(/\\/g, "/");
   let raw;
   try {
     // HEAD 表示最新一次提交；如果有未提交改动，git diff 会把它们包含进来
-    raw = execSync(`git diff HEAD -- ${relPath}`, { cwd: gitRoot, encoding: 'utf8' });
+    raw = execSync(`git diff HEAD -- ${relPath}`, {
+      cwd: gitRoot,
+      encoding: "utf8",
+    });
   } catch (e) {
     // 可能没任何改动或命令失败
-    raw = '';
+    raw = "";
   }
 
   let truncated = false;
   if (raw.length > maxChars) {
-    raw = raw.slice(0, maxChars) + '\n...（已截断）';
+    raw = raw.slice(0, maxChars) + "\n...（已截断）";
     truncated = true;
   }
   return { diff: raw, truncated };
@@ -273,14 +308,27 @@ function getCurrentFileDiff(document) {
  * @returns {boolean} - 是否启用自动触发
  */
 function isAutoTriggerEnabled() {
-  return vscode.workspace.getConfiguration('navicode').get('enableAutoTrigger', true);
+  return vscode.workspace
+    .getConfiguration("navicode")
+    .get("enableAutoTrigger", true);
 }
 
 /**
  * 检查是否启用关联文件功能
  */
 function isRelatedFilesEnabled() {
-  return vscode.workspace.getConfiguration('navicode').get('enableRelatedFiles', false);
+  return vscode.workspace
+    .getConfiguration("navicode")
+    .get("enableRelatedFiles", false);
+}
+
+/**
+ * 检查是否启用纯净模式
+ */
+function isPurittyEnabled() {
+  return vscode.workspace
+    .getConfiguration("navicode")
+    .get("enablePurity", false);
 }
 
 /**
@@ -293,78 +341,75 @@ function isRelatedFilesEnabled() {
 function extractImportPaths(content, language, currentFilePath) {
   const importPaths = [];
   const currentDir = path.dirname(currentFilePath);
-  
+
   // 不同语言的导入语句正则
   const patterns = {
     javascript: [
-      /import\s+.*\s+from\s+['"](\.\/|\.\.\/|\/)[^'"]+['"]/g,  // ES6 import
-      /require\(\s*['"](\.\/|\.\.\/|\/)[^'"]+['"]\s*\)/g        // CommonJS require
+      /import\s+.*\s+from\s+['"](\.\/|\.\.\/|\/)[^'"]+['"]/g, // ES6 import
+      /require\(\s*['"](\.\/|\.\.\/|\/)[^'"]+['"]\s*\)/g, // CommonJS require
     ],
     typescript: [
       /import\s+.*\s+from\s+['"](\.\/|\.\.\/|\/)[^'"]+['"]/g,
-      /import\s*\(\s*['"](\.\/|\.\.\/|\/)[^'"]+['"]\s*\)/g
+      /import\s*\(\s*['"](\.\/|\.\.\/|\/)[^'"]+['"]\s*\)/g,
     ],
     python: [
       /from\s+(\.+\w+|\w+)(\.\w+)*\s+import/g,
-      /import\s+(\w+)(\.\w+)*/g
+      /import\s+(\w+)(\.\w+)*/g,
     ],
-    java: [
-      /import\s+([a-zA-Z0-9_$.]+\*?);/g
-    ],
-    'c': [
-      /#include\s+["<](\.\/|\.\.\/)?([^">]+)[">]/g
-    ],
-    'cpp': [
-      /#include\s+["<](\.\/|\.\.\/)?([^">]+)[">]/g
-    ]
+    java: [/import\s+([a-zA-Z0-9_$.]+\*?);/g],
+    c: [/#include\s+["<](\.\/|\.\.\/)?([^">]+)[">]/g],
+    cpp: [/#include\s+["<](\.\/|\.\.\/)?([^">]+)[">]/g],
   };
-  
+
   // 获取适用于当前语言的模式
   const languagePatterns = patterns[language] || [];
-  
+
   // 遍历所有模式进行匹配
   for (const pattern of languagePatterns) {
     const matches = content.match(pattern) || [];
-    
+
     for (const match of matches) {
-      let importPath = '';
-      
+      let importPath = "";
+
       // 根据不同语言提取导入路径
-      if (language === 'javascript' || language === 'typescript') {
+      if (language === "javascript" || language === "typescript") {
         // 提取 'from "path"' 或 'require("path")' 中的路径
         const pathMatch = match.match(/['"]([^'"]+)['"]/);
-        if (pathMatch && pathMatch[1].startsWith('.')) {
+        if (pathMatch && pathMatch[1].startsWith(".")) {
           importPath = path.resolve(currentDir, pathMatch[1]);
         }
-      } else if (language === 'python') {
+      } else if (language === "python") {
         // 处理 from ... import ... 或 import ...
-        let modulePath = '';
-        if (match.startsWith('from')) {
+        let modulePath = "";
+        if (match.startsWith("from")) {
           const fromMatch = match.match(/from\s+([^\s]+)/);
           if (fromMatch) modulePath = fromMatch[1];
         } else {
           const importMatch = match.match(/import\s+([^\s]+)/);
           if (importMatch) modulePath = importMatch[1];
         }
-        
+
         // 处理相对导入
-        if (modulePath.startsWith('.')) {
-          importPath = path.resolve(currentDir, modulePath.replace(/\./g, '/') + '.py');
+        if (modulePath.startsWith(".")) {
+          importPath = path.resolve(
+            currentDir,
+            modulePath.replace(/\./g, "/") + ".py"
+          );
         }
-      } else if (language === 'java') {
+      } else if (language === "java") {
         // Java 导入处理
         const packageMatch = match.match(/import\s+([^;]+);/);
         if (packageMatch) {
-          const packagePath = packageMatch[1].replace(/\./g, '/');
+          const packagePath = packageMatch[1].replace(/\./g, "/");
           // 搜索项目中的Java文件
-          importPath = packagePath + '.java';
+          importPath = packagePath + ".java";
         }
-      } else if (language === 'c' || language === 'cpp') {
+      } else if (language === "c" || language === "cpp") {
         // 处理 #include "file.h" 或 #include <file.h>
         const includeMatch = match.match(/["<]([^">]+)[">]/);
         if (includeMatch) {
           const includePath = includeMatch[1];
-          if (includePath.startsWith('./') || includePath.startsWith('../')) {
+          if (includePath.startsWith("./") || includePath.startsWith("../")) {
             importPath = path.resolve(currentDir, includePath);
           } else {
             // 本地头文件，尝试在当前目录和项目中查找
@@ -372,13 +417,13 @@ function extractImportPaths(content, language, currentFilePath) {
           }
         }
       }
-      
+
       if (importPath && !importPaths.includes(importPath)) {
         importPaths.push(importPath);
       }
     }
   }
-  
+
   return importPaths;
 }
 
@@ -394,28 +439,32 @@ async function findFilesInProject(filePath) {
       await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
       return [filePath];
     } catch (error) {
-      console.log("\n文件不存在：",filePath);
+      console.log("\n文件不存在：", filePath);
       // 文件不存在
       return [];
     }
   }
-  
+
   // 对于相对路径或模块名，使用glob模式搜索
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders) return [];
-  
+
   // 构建搜索模式
   const fileName = path.basename(filePath);
-  const fileExt = path.extname(filePath) || '.*';
-  const searchPattern = fileName === filePath 
-    ? `**/${fileName}${fileExt === '.*' ? fileExt : ''}`
-    : `**/${filePath}`;
-  
+  const fileExt = path.extname(filePath) || ".*";
+  const searchPattern =
+    fileName === filePath
+      ? `**/${fileName}${fileExt === ".*" ? fileExt : ""}`
+      : `**/${filePath}`;
+
   try {
-    const files = await vscode.workspace.findFiles(searchPattern, '**/node_modules/**');
-    return files.map(file => file.fsPath);
+    const files = await vscode.workspace.findFiles(
+      searchPattern,
+      "**/node_modules/**"
+    );
+    return files.map((file) => file.fsPath);
   } catch (error) {
-    console.error('搜索项目文件失败:', error);
+    console.error("搜索项目文件失败:", error);
     return [];
   }
 }
@@ -427,11 +476,13 @@ async function findFilesInProject(filePath) {
  */
 async function readFileContent(filePath) {
   try {
-    const content = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
-    return Buffer.from(content).toString('utf8');
+    const content = await vscode.workspace.fs.readFile(
+      vscode.Uri.file(filePath)
+    );
+    return Buffer.from(content).toString("utf8");
   } catch (error) {
     console.error(`读取文件失败 ${filePath}:`, error);
-    return '';
+    return "";
   }
 }
 
@@ -442,68 +493,73 @@ async function readFileContent(filePath) {
  */
 async function getRelatedFilesContent(document) {
   if (!isRelatedFilesEnabled()) return { files: [] };
-  
-  const maxFileSize = vscode.workspace.getConfiguration('navicode').get('maxRelatedFileSize', 50000);
-  const maxTotalSize = vscode.workspace.getConfiguration('navicode').get('maxTotalRelatedFilesSize', 50000);
-  
+
+  const maxFileSize = vscode.workspace
+    .getConfiguration("navicode")
+    .get("maxRelatedFileSize", 50000);
+  const maxTotalSize = vscode.workspace
+    .getConfiguration("navicode")
+    .get("maxTotalRelatedFilesSize", 50000);
+
   const content = document.getText();
   const language = document.languageId;
   const filePath = document.fileName;
-  
+
   // 提取导入路径
   const importPaths = extractImportPaths(content, language, filePath);
-  
+
   // 查找文件
   const relatedFiles = [];
   let totalSize = 0;
   const processedPaths = new Set(); // 防止循环引用
-  
-  for (const importPath of importPaths) {
 
-    console.log("\n找到的文件路径：",importPath);
+  for (const importPath of importPaths) {
+    console.log("\n找到的文件路径：", importPath);
 
     if (processedPaths.has(importPath)) continue;
     processedPaths.add(importPath);
-    
+
     const files = await findFilesInProject(importPath);
-    
+
     for (const file of files) {
       if (file === filePath) continue; // 跳过自引用
-      
+
       let fileContent = await readFileContent(file);
-      
+
       // 检查文件大小
       if (fileContent.length > maxFileSize) {
-        fileContent = fileContent.substring(0, maxFileSize) + 
+        fileContent =
+          fileContent.substring(0, maxFileSize) +
           `\n// ... 文件过大，已截断 (文件长度：${fileContent.length} > 文件可读取最大长度：${maxFileSize} 字符)`;
       }
-      
+
       // 检查总大小限制
       if (totalSize + fileContent.length > maxTotalSize) {
         if (relatedFiles.length === 0) {
           // 至少包含一个文件
           relatedFiles.push({
             path: file,
-            content: fileContent.substring(0, maxTotalSize) + 
-              `\n// ... 超出总大小限制 (${maxTotalSize} 字符)`
+            content:
+              fileContent.substring(0, maxTotalSize) +
+              `\n// ... 超出总大小限制 (${maxTotalSize} 字符)`,
           });
         }
-        return { 
+        return {
           files: relatedFiles,
           truncated: true,
-          message: `相关文件总大小超过限制 (${maxTotalSize} 字符)，因此只截取部分内容`
+          message: `相关文件总大小超过限制 (${maxTotalSize} 字符)，因此只截取部分内容`,
         };
       }
-      
+
       relatedFiles.push({
         path: file,
-        content: fileContent
+        content: fileContent,
       });
-      
+
       totalSize += fileContent.length;
     }
   }
-  
+
   return { files: relatedFiles };
 }
 
@@ -511,39 +567,41 @@ async function getRelatedFilesContent(document) {
  * 插件激活函数
  */
 function activateCodeCompletion(context) {
-  const languages = ['javascript', 'python', 'java', 'c', 'cpp'];
+  const languages = ["javascript", "python", "java", "c", "cpp"];
 
   // 注册配置变更事件
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('navicode.enableAutoTrigger')) {
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("navicode.enableAutoTrigger")) {
         // 配置已更改，可以在这里添加额外的处理逻辑
-        console.log('自动触发设置已更改为:', isAutoTriggerEnabled());
+        console.log("自动触发设置已更改为:", isAutoTriggerEnabled());
       }
     })
   );
 
   // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
   context.subscriptions.push(
-    vscode.commands.registerCommand('navicode.generateSuggestion', async () => {
+    vscode.commands.registerCommand("navicode.generateSuggestion", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !languages.includes(editor.document.languageId)) return;
-      
+
       // 显示加载提示
       showLoadingIndicator(editor);
-      
+
       try {
         // 标记为手动触发
         isManuallyTriggered = true;
-        
+
         // 触发内联补全
-        await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+        await vscode.commands.executeCommand(
+          "editor.action.inlineSuggest.trigger"
+        );
       } finally {
         // 重置标记
         setTimeout(() => {
           isManuallyTriggered = false;
         }, 500);
-        
+
         // 无论成功与否，都隐藏加载提示
         hideLoadingIndicator();
       }
@@ -555,62 +613,75 @@ function activateCodeCompletion(context) {
   //不过不清楚具体的延迟是多少
   context.subscriptions.push(
     vscode.languages.registerInlineCompletionItemProvider(
-      languages.map(lang => ({ language: lang })), // 仅支持指定的语言
+      languages.map((lang) => ({ language: lang })), // 仅支持指定的语言
       {
-        provideInlineCompletionItems: async (document, position, context, token) => {
+        provideInlineCompletionItems: async (
+          document,
+          position,
+          context,
+          token
+        ) => {
           // 检查是否应该提供补全
           const autoTriggerEnabled = isAutoTriggerEnabled();
-          
+
           // 如果自动触发被禁用且不是手动触发，则不提供补全
           if (!autoTriggerEnabled && !isManuallyTriggered) {
             return null;
           }
-          
-          if(isManuallyTriggered){
+
+          if (isManuallyTriggered) {
             // 显示加载提示
             const editor = vscode.window.activeTextEditor;
             if (editor && editor.document === document) {
               showLoadingIndicator(editor);
             }
           }
-          
+
           try {
             // 获取建议
             const suggestion = await getSuggestion(document, position);
             if (!suggestion) return null;
-            
+
             // 创建内联补全项
             const item = new vscode.InlineCompletionItem(suggestion);
             item.range = new vscode.Range(position, position);
-            
+
             return [item];
           } finally {
             // 隐藏加载提示
             hideLoadingIndicator();
           }
-        }
+        },
       }
     )
   );
-  
+
   // 注册命令来切换自动触发功能
   context.subscriptions.push(
-    vscode.commands.registerCommand('navicode.toggleAutoTrigger', async () => {
+    vscode.commands.registerCommand("navicode.toggleAutoTrigger", async () => {
       const currentValue = isAutoTriggerEnabled();
-      await vscode.workspace.getConfiguration('navicode').update('enableAutoTrigger', !currentValue, true);
-      vscode.window.showInformationMessage(`代码自动补全已${!currentValue ? '启用' : '禁用'}`);
+      await vscode.workspace
+        .getConfiguration("navicode")
+        .update("enableAutoTrigger", !currentValue, true);
+      vscode.window.showInformationMessage(
+        `代码自动补全已${!currentValue ? "启用" : "禁用"}`
+      );
     })
   );
 
   // 注册命令来切换读取README功能
   context.subscriptions.push(
-    vscode.commands.registerCommand('navicode.toggleReadme', async () => {
+    vscode.commands.registerCommand("navicode.toggleReadme", async () => {
       const currentValue = isReadmeEnabled();
-      await vscode.workspace.getConfiguration('navicode').update('enableReadme', !currentValue, true);
-      vscode.window.showInformationMessage(`README读取功能${!currentValue ? '启用' : '禁用'}`);
+      await vscode.workspace
+        .getConfiguration("navicode")
+        .update("enableReadme", !currentValue, true);
+      vscode.window.showInformationMessage(
+        `README读取功能${!currentValue ? "启用" : "禁用"}`
+      );
     })
   );
-  
+
   // 监听编辑器关闭事件，确保清理装饰器
   context.subscriptions.push(
     vscode.window.onDidChangeVisibleTextEditors(() => {
@@ -620,49 +691,244 @@ function activateCodeCompletion(context) {
 
   // 注册Git Diff功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('navicode.toggleGitDiff', async () => {
+    vscode.commands.registerCommand("navicode.toggleGitDiff", async () => {
       const currentValue = isGitDiffEnabled();
-      await vscode.workspace.getConfiguration('navicode').update('enableGitDiff', !currentValue, true);
-      vscode.window.showInformationMessage(`Git查询变更历史功能已${!currentValue ? '启用' : '禁用'}`);
+      await vscode.workspace
+        .getConfiguration("navicode")
+        .update("enableGitDiff", !currentValue, true);
+      vscode.window.showInformationMessage(
+        `Git查询变更历史功能已${!currentValue ? "启用" : "禁用"}`
+      );
     })
   );
 
   // 注册关联文件功能的开关命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('navicode.toggleRelatedFiles', async () => {
+    vscode.commands.registerCommand("navicode.toggleRelatedFiles", async () => {
       const currentValue = isRelatedFilesEnabled();
-      await vscode.workspace.getConfiguration('navicode').update('enableRelatedFiles', !currentValue, true);
-      vscode.window.showInformationMessage(`关联文件功能已${!currentValue ? '启用' : '禁用'}`);
+      await vscode.workspace
+        .getConfiguration("navicode")
+        .update("enableRelatedFiles", !currentValue, true);
+      vscode.window.showInformationMessage(
+        `关联文件功能已${!currentValue ? "启用" : "禁用"}`
+      );
+    })
+  );
+
+  // 注册纯净模式的开关命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand("navicode.togglePurity", async () => {
+      const currentValue = isPurittyEnabled();
+      await vscode.workspace
+        .getConfiguration("navicode")
+        .update("enablePurity", !currentValue, true);
+      vscode.window.showInformationMessage(
+        `纯净模式已${!currentValue ? "启用" : "禁用"}`
+      );
     })
   );
 
   // 注册编辑提示词命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('navicode.editCustomPrompt', async () => {
-      const config = vscode.workspace.getConfiguration('navicode');
-      const currentPrompt = config.get('customPrompt', '');
-      
+    vscode.commands.registerCommand("navicode.editCustomPrompt", async () => {
+      const config = vscode.workspace.getConfiguration("navicode");
+      const currentPrompt = config.get("customPrompt", "");
+
       const newPrompt = await vscode.window.showInputBox({
         value: currentPrompt,
-        prompt: '编辑代码补全提示词',
-        placeHolder: '例如：请提供高质量的{{language}}代码补全，保持代码风格一致',
-        validateInput: text => {
+        prompt: "编辑代码补全提示词",
+        placeHolder:
+          "例如：请提供高质量的{{language}}代码补全，保持代码风格一致",
+        validateInput: (text) => {
           if (text.length > 500) {
-            return '提示词过长，请保持在500字符以内';
+            return "提示词过长，请保持在500字符以内";
           }
           return null;
-        }
+        },
       });
-      
-      if (newPrompt !== undefined) { // 用户没有取消
-        await config.update('customPrompt', newPrompt, true);
-        console.log("用户自定义提示词：",newPrompt);
-        vscode.window.showInformationMessage('代码补全提示词已更新');
+
+      if (newPrompt !== undefined) {
+        // 用户没有取消
+        await config.update("customPrompt", newPrompt, true);
+        console.log("用户自定义提示词：", newPrompt);
+        vscode.window.showInformationMessage("代码补全提示词已更新");
       }
     })
   );
-}
 
+  //用户打开自定义模板的功能注册
+  // 1. 定义所有内置模板，并读取它们的原始内容
+  const config = vscode.workspace.getConfiguration("navicode");
+  // inspect 拿到 package.json 里定义的默认模板数组
+  const templatesInspect = config.inspect("templates");
+  const defaultTemplates = Array.isArray(templatesInspect.defaultValue)
+    ? templatesInspect.defaultValue
+    : [];
+
+  // 把每条都标记为内置
+  const builtInTemplates = defaultTemplates.map((t) => ({
+    ...t,
+    isBuiltIn: true,
+  }));
+
+  // 读用户自己加的（filter 掉与内置同 id 的）
+  let userTemplates = config.get("templates", []);
+  let activeId = config.get("activeTemplate", builtInTemplates[0].id);
+
+  // 合并
+  let templates = mergeTemplates(builtInTemplates, userTemplates);
+
+  // 4. 注册命令和 Webview
+  context.subscriptions.push(
+    vscode.commands.registerCommand("navicode.configureTemplate", async () => {
+      const panel = vscode.window.createWebviewPanel(
+        "navicodeTemplateConfig",
+        "Prompt 模板配置",
+        vscode.ViewColumn.One,
+        { enableScripts: true }
+      );
+
+      // 加载 HTML
+      const htmlPath = path.join(
+        context.extensionPath,
+        "media",
+        "promptConfig.html"
+      );
+      let html = fs
+        .readFileSync(htmlPath, "utf8")
+        .replace(
+          /%BASE_URI%/g,
+          panel.webview
+            .asWebviewUri(
+              vscode.Uri.file(path.join(context.extensionPath, "media"))
+            )
+            .toString()
+        );
+      panel.webview.html = html;
+
+      // 首次 init
+      panel.webview.postMessage({ command: "init", templates, activeId });
+
+      // 处理来自 Webview 的消息
+      panel.webview.onDidReceiveMessage(async (message) => {
+        switch (message.command) {
+          case "save":
+            // 1. 在 userTemplates 里替换或新增这条 id
+            userTemplates = userTemplates.filter((t) => t.id !== message.id);
+            userTemplates.push({
+              id: message.id,
+              name: message.name,
+              template: message.template,
+            });
+
+            // 2. 写回 settings.json
+            await config.update("templates", userTemplates, true);
+
+            // 3. 重新合并并通知 Webview 刷新
+            templates = mergeTemplates(builtInTemplates, userTemplates);
+            panel.webview.postMessage({ command: "init", templates, activeId });
+
+            vscode.window.showInformationMessage(
+              `模板「${message.name}」已保存`
+            );
+            break;
+
+          case "reset":
+            if (builtInTemplates.some((t) => t.id === message.id)) {
+              // 删除掉对应的覆盖记录，merge 时就回退到内置原版
+              userTemplates = userTemplates.filter((t) => t.id !== message.id);
+              vscode.window.showInformationMessage(
+                `已重置「${message.name}」到内置默认`
+              );
+            } else {
+              // 自定义模板：直接清空内容或做你想要的 fallback
+              userTemplates = userTemplates.map((t) =>
+                t.id === message.id ? { ...t, template: "" } : t
+              );
+              vscode.window.showInformationMessage(
+                `已重置自定义模板「${message.name}」`
+              );
+            }
+            await config.update("templates", userTemplates, true);
+
+            templates = mergeTemplates(builtInTemplates, userTemplates);
+            panel.webview.postMessage({ command: "init", templates, activeId });
+            break;
+
+          case "add":
+            // 新增一定属于用户模板
+            const newId = `tpl_${Date.now()}`;
+            const newTpl = {
+              id: newId,
+              name: message.name || `新模板-${userTemplates.length + 1}`,
+              template: message.template || "",
+              isBuiltIn: false,
+            };
+            templates.push(newTpl);
+            userTemplates.push({
+              id: newId,
+              name: newTpl.name,
+              template: newTpl.template,
+            });
+            await config.update("templates", userTemplates, true);
+            activeId = newId;
+            await config.update("activeTemplate", activeId, true);
+            panel.webview.postMessage({ command: "init", templates, activeId });
+            vscode.window.showInformationMessage(
+              `已创建新模板「${newTpl.name}」`
+            );
+            break;
+
+          case "delete":
+            // 内置模板禁止删除
+            if (builtInTemplates.some((t) => t.id === message.id)) {
+              vscode.window.showWarningMessage("系统内置模板无法删除");
+              return;
+            }
+            templates = templates.filter((t) => t.id !== message.id);
+            userTemplates = userTemplates.filter((t) => t.id !== message.id);
+            await config.update("templates", userTemplates, true);
+            if (activeId === message.id) {
+              activeId = builtInTemplates[0].id;
+              await config.update("activeTemplate", activeId, true);
+            }
+            panel.webview.postMessage({ command: "init", templates, activeId });
+            vscode.window.showInformationMessage(
+              `已删除模板「${message.name}」`
+            );
+            break;
+
+          case "switch":
+            activeId = message.id;
+            await config.update("activeTemplate", activeId, true);
+            panel.webview.postMessage({ command: "init", templates, activeId });
+            break;
+        }
+      });
+    })
+  );
+}
+/**
+ * 将 builtInTemplates 和 userTemplates 合并成“最终展示”的 templates 数组
+ */
+function mergeTemplates(builtInTemplates, userTemplates) {
+  // 先把内置模板一条条合并（有覆盖就用覆盖内容）
+  const mergedBuiltIns = builtInTemplates.map((bt) => {
+    const override = userTemplates.find((ut) => ut.id === bt.id);
+    if (override) {
+      // 保留 isBuiltIn 标志，更新 template
+      return { ...bt, template: override.template };
+    }
+    return bt;
+  });
+
+  // 再把 id 不在内置里的用户模板当成“纯自定义”附加
+  const custom = userTemplates
+    .filter((ut) => !builtInTemplates.some((bt) => bt.id === ut.id))
+    .map((ut) => ({ ...ut, isBuiltIn: false }));
+
+  return [...mergedBuiltIns, ...custom];
+}
 /**
  * 插件关闭清理
  */
@@ -672,5 +938,5 @@ function deactivateCodeCompletion() {
 
 module.exports = {
   activateCodeCompletion,
-  deactivateCodeCompletion
+  deactivateCodeCompletion,
 };
