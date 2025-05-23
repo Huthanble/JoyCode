@@ -171,13 +171,14 @@ function activateAiChatCodeGen(context) {
     if (message.command === 'askAI') {
         const userInput = message.text;
         const model = message.model || 'deepseek-chat'; // 默认模型
+        const systemPrompt = message.systemPrompt || '你是代码助手，请用简洁、专业的方式回答用户问题。';
         if (!userInput || userInput.trim() === '') {
             panel.webview.postMessage({ command: "response", text: "输入不能为空，请重新输入。" });
             return;
         }
 
         addToChatHistory('user', userInput);
-
+        
         // 拼接上下文文件内容
         let contextPrompt = '';
         if (contextFiles.length > 0) {
@@ -185,7 +186,7 @@ function activateAiChatCodeGen(context) {
                 `【上下文文件】${f.fileName}\n路径: ${f.filePath}\n内容:\n${f.fileContent}\n`
             ).join('\n');
         }
-
+        
         try {
             const response = await openai.chat.completions.create({
                 model,
@@ -193,7 +194,7 @@ function activateAiChatCodeGen(context) {
                     {
                         role: "system",
                         content:
-                            `${contextPrompt}\n当前文件路径: ${filePath}\n文件内容:\n${fileContent}\n你是代码助手，请阅读文件内容并回答问题。`
+                            `${contextPrompt}\n当前文件路径: ${filePath}\n文件内容:\n${fileContent}\n${systemPrompt}`
                     },
                     ...chatHistory.map(msg => ({
                         role: msg.role,

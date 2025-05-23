@@ -262,13 +262,39 @@
             background-position: right 8px center;
             background-size: 18px 18px;
             position: absolute;
-            right: 65px;
+            right: 85px;
             bottom: 4px;
             z-index: 2;
             margin-bottom: 0;
         }
         #model-select:focus {
             border-color: #7a7b7c;
+        }
+        #scroll-bottom-btn {
+            position: fixed;
+            right: 24px;   
+            top: 32px;    
+            bottom: auto;  
+
+        }
+        #edit-system-btn {
+            margin-left: 10px;
+            padding: 10px;
+            background-color: transparent;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+            color: #fff; /* 白色图标 */
+            box-sizing: border-box;
+            transition: background 0.2s;
+        }
+        #edit-system-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        #edit-system-btn i {
+            font-size: 18px;
+            color: #fff; /* 保证图标也是白色 */
         }
     </style>
 </head>
@@ -299,11 +325,44 @@
                     <option value="gpt-4">gpt-4</option>
                     <!-- 你可以根据需要添加更多模型 -->
                 </select>
+                <button id="edit-system-btn" title="修改System Prompt" style="margin-left:10px;">
+                    <i class="fas fa-cog"></i>
+                </button>
             </div>
             
         </div>
     </div>
-
+      <button id="scroll-bottom-btn" title="滚动到底部" style="
+    position: fixed;
+    right: 24px;
+    bottom: 32px;
+    z-index: 99;
+    background: #444;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    cursor: pointer;
+">
+    <i class="fas fa-arrow-down"></i>
+</button>  
+<div id="system-modal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:999;
+    background:rgba(0,0,0,0.3);align-items:center;justify-content:center;">
+    <div style="background:#222;padding:24px 20px;border-radius:8px;min-width:320px;max-width:90vw;">
+        <div style="font-size:16px;font-weight:bold;color:#fff;margin-bottom:8px;">编辑 System Prompt</div>
+        <textarea id="system-prompt-input" style="width:100%;height:80px;border-radius:4px;padding:8px;font-size:14px;">你是代码助手，请用简洁、专业的方式回答用户问题。</textarea>
+        <div style="margin-top:12px;text-align:right;">
+            <button id="cancel-system-btn" style="margin-right:10px;">取消</button>
+            <button id="save-system-btn" style="background:#4a90e2;color:#fff;">确定</button>
+        </div>
+    </div>
+</div>
     <script>
         const vscode = acquireVsCodeApi();
         const messagesDiv = document.getElementById('messages');//在html中通过id查找元素
@@ -312,6 +371,24 @@
         sendButton.addEventListener('click', sendMessage);
         const statusDiv=document.getElementById('status');
         let contextFiles = []; // 存储上下文文件
+        let systemPrompt = '你是代码助手，请用简洁、专业的方式回答用户问题。';
+        
+        
+        // 打开弹窗
+        document.getElementById('edit-system-btn').onclick = function() {
+            document.getElementById('system-modal').style.display = 'flex';
+            document.getElementById('system-prompt-input').value = systemPrompt;
+        };
+        // 取消
+        document.getElementById('cancel-system-btn').onclick = function() {
+            document.getElementById('system-modal').style.display = 'none';
+        };
+        // 保存
+        document.getElementById('save-system-btn').onclick = function() {
+            systemPrompt = document.getElementById('system-prompt-input').value.trim() || systemPrompt;
+            document.getElementById('system-modal').style.display = 'none';
+        };
+
         // 在插件加载时显示欢迎消息
         window.addEventListener('DOMContentLoaded', () => {
             typeWelcomeMessage('欢迎使用navicode！', 'welcome-message');
@@ -395,7 +472,7 @@
                 }
 
                 appendMessage('user', text);
-                vscode.postMessage({ command: 'askAI', text });
+                vscode.postMessage({ command: 'askAI', text, model, systemPrompt });
                 input.value = '';
                 // showStatus('正在等待AI回复...'); // 显示状态
                 appendMessage('ai', '<span style="color:gray;font-size:18px;font-weight:bold;">正在等待AI回复...</span>');
@@ -633,25 +710,6 @@ function renderContextFiles() {
     });
 }
     </script>
-  <button id="scroll-bottom-btn" title="滚动到底部" style="
-    position: fixed;
-    right: 24px;
-    bottom: 32px;
-    z-index: 99;
-    background: #444;
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 22px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    cursor: pointer;
-">
-    <i class="fas fa-arrow-down"></i>
-</button>  
+
 </body>
 </html>
