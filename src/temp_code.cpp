@@ -1,17 +1,13 @@
 #include <iostream>
+using namespace std;
+
+int add(int a, int b) {
+    return a + b;
+}
 
 int main() {
-    int num1, num2, sum;
-
-    std::cout << "请输入第一个整数: ";
-    std::cin >> num1;
-
-    std::cout << "请输入第二个整数: ";
-    std::cin >> num2;
-
-    sum = num1 + num2;
-
-    std::cout << "两个整数的和是: " << sum << std::endl;
-
+    int a = 1, b = 2;
+    auto result = add(a, b);
+    std::cout << "Test result: " << result << std::endl;
     return 0;
 }

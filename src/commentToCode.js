@@ -21,6 +21,7 @@ async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
     code = newCode;
     attempt++;
   }
+  console.log('多次优化失败，返回原始代码');
   return { success: false, code, output: '多次优化失败，请手动检查。' };
 }
 
