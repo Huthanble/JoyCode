@@ -51,6 +51,13 @@
       </li>
       <li><code>{{this.path}} ：关联文件的路径</code></li>
       <li><code>{{this.content}} ：关联文件的内容</code></li>
+      <li><code>{{ragContext}} ：Rag查询的内容</code></li>
+      <li>
+        <code
+          >{{#if ragContext}}..{{/if}}
+          ：是否需要Rag查询的内容(if的判断与相关功能的开关挂钩)</code
+        >
+      </li>
       <li><code>{{prefix}} ：前文代码</code></li>
     </ul>
     <!-- 模板切换下拉框 -->
