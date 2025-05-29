@@ -5,9 +5,10 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const { getOpenAIInstance, getSelectedModel } = require("./openaiClient");
 const Handlebars = require("handlebars");
+const glob = require("glob");
+const { HNSWLib } = require("@langchain/community/vectorstores/hnswlib");
+const { OpenAIEmbeddings } = require("@langchain/openai"); // 用于检索时自动embedding
 
-const openai = getOpenAIInstance();
-const model = getSelectedModel();
 // 用于显示加载提示的装饰器
 let loadingDecorationType = null;
 // 标记是否由命令手动触发
@@ -59,10 +60,25 @@ function hideLoadingIndicator() {
  * @returns {Promise<string|null>} - 返回补全建议或 null
  */
 async function getSuggestion(document, position) {
+  const openai = getOpenAIInstance();
+  const model = getSelectedModel();
+
   const fullText = document.getText();
   const cursorOffset = document.offsetAt(position);
   const prompt = fullText.slice(0, cursorOffset);
   const suffix = fullText.slice(cursorOffset);
+
+  // 查询本地向量数据库，获取 ragContext
+  let ragContext = "";
+
+  if (isRagEnabled()) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders) {
+      const rootDir = workspaceFolders[0].uri.fsPath;
+      // 你可以根据实际情况调整 topN
+      ragContext = await getRagContext(prompt, 3, rootDir);
+    }
+  }
 
   // 获取用户自定义提示词
   const customPrompt = getCustomPrompt(document);
@@ -122,6 +138,7 @@ async function getSuggestion(document, position) {
       fileDiff: fileDiff.diff,
       includeRelatedFiles: relatedFiles.files.length > 0,
       relatedFiles: relatedFiles.files,
+      ragContext, // 新增
     };
     const promptWithContext = template(vars);
 
@@ -151,6 +168,10 @@ async function getSuggestion(document, position) {
       "查询纯净模式开关：",
       vscode.workspace.getConfiguration("navicode").get("enablePurity", true)
     );
+    console.log(
+      "查询Rag开关：",
+      vscode.workspace.getConfiguration("navicode").get("enableRag", true)
+    );
 
     if (isPurittyEnabled()) {
       //纯粹代码前缀版本
@@ -173,7 +194,7 @@ async function getSuggestion(document, position) {
         promptWithContext
       );
       const response = await openai.completions.create({
-        model: "deepseek-chat",
+        model: model,
         prompt: promptWithContext,
         suffix: suffix,
         max_tokens: 200,
@@ -186,6 +207,159 @@ async function getSuggestion(document, position) {
     console.error("调用 DeepSeek API 出错:", error);
     return null;
   }
+}
+
+/**
+ * 查询本地向量数据库，返回最相关的代码片段拼接成字符串
+ * @param {string} queryText - 查询文本
+ * @param {number} topN - 返回前N个片段
+ * @param {string} rootDir - 仓库根目录
+ * @returns {Promise<string>} - 拼接好的上下文字符串
+ */
+async function getRagContext(queryText, topN, rootDir) {
+  const results = await queryRagSnippetsHNSW(queryText, topN, rootDir);
+  return results
+    .map(
+      (snip) => `文件: ${snip.file} 行: ${snip.start}-${snip.end}\n${snip.text}`
+    )
+    .join("\n---\n");
+}
+
+/**
+ * 获取所有代码文件路径
+ * @param {string} rootDir 仓库根目录
+ * @returns {Promise<string[]>}
+ */
+function getAllCodeFiles(rootDir) {
+  // 支持的代码后缀
+  const exts = ["js", "ts", "py", "java", "cpp", "c", "h", "hpp"];
+  const pattern = `**/*.+(${exts.join("|")})`;
+  return new Promise((resolve, reject) => {
+    glob(
+      pattern,
+      { cwd: rootDir, absolute: true, ignore: "**/node_modules/**" },
+      (err, files) => {
+        if (err) reject(err);
+        else resolve(files);
+      }
+    );
+  });
+}
+
+/**
+ * 按N行拆分
+ * @param {string} content 文件内容
+ * @param {number} chunkSize 每片行数
+ * @returns {Array<{start: number, end: number, text: string}>}
+ */
+function splitByLines(content, chunkSize = 50) {
+  const lines = content.split("\n");
+  const chunks = [];
+  for (let i = 0; i < lines.length; i += chunkSize) {
+    const chunk = lines.slice(i, i + chunkSize).join("\n");
+    chunks.push({
+      start: i + 1,
+      end: Math.min(i + chunkSize, lines.length),
+      text: chunk,
+    });
+  }
+  return chunks;
+}
+
+/**
+ * 扫描仓库所有代码文件并拆分
+ * @param {string} rootDir
+ * @returns {Promise<Array<{id, file, start, end, text}>>}
+ */
+async function scanAndSplitRepo(rootDir) {
+  const files = await getAllCodeFiles(rootDir);
+  let results = [];
+  for (const file of files) {
+    const content = fs.readFileSync(file, "utf8");
+    const chunks = splitByLines(content, 50);
+    chunks.forEach((chunk, idx) => {
+      results.push({
+        id: `${path.relative(rootDir, file)}_${chunk.start}_${chunk.end}`,
+        file: path.relative(rootDir, file),
+        start: chunk.start,
+        end: chunk.end,
+        text: chunk.text,
+      });
+    });
+  }
+  return results;
+}
+
+let hnswStore = null;
+
+/**
+ * 初始化或加载本地 HNSWLib 向量数据库
+ * Initialize or load a local HNSWLib vector database.
+ * @param {string} rootDir - 仓库根目录 / Repository root directory
+ * @returns {Promise<HNSWLib>} - HNSWLib 实例 / HNSWLib instance
+ */
+async function getHNSWStore(rootDir) {
+  const dbPath = path.join(rootDir, ".navicode_hnsw");
+  if (hnswStore) return hnswStore;
+
+  if (fs.existsSync(dbPath)) {
+    // 如果数据库文件已存在，则加载
+    // Load existing database if exists
+    hnswStore = await HNSWLib.load(
+      dbPath,
+      new OpenAIEmbeddings({ openAIApiKey: process.env.gpt4 })
+    );
+  } else {
+    // 否则新建一个数据库
+    // Otherwise, create a new one
+    hnswStore = new HNSWLib(
+      new OpenAIEmbeddings({ openAIApiKey: process.env.gpt4 }),
+      { space: "cosine" }
+    );
+  }
+  return hnswStore;
+}
+
+/**
+ * 插入所有代码片段到本地 HNSWLib 数据库，并保存到磁盘
+ * @param {Array<{id, file, start, end, text}>} chunks - 代码片段数组
+ * @param {string} rootDir - 仓库根目录
+ */
+async function insertChunksToHNSW(chunks, rootDir) {
+  const store = await getHNSWStore(rootDir);
+  const docs = chunks.map((chunk) => ({
+    pageContent: chunk.text,
+    metadata: {
+      file: chunk.file,
+      start: chunk.start,
+      end: chunk.end,
+      id: chunk.id,
+    },
+  }));
+  await store.addDocuments(docs);
+  // 保存数据库到本地
+  const dbPath = path.join(rootDir, ".navicode_hnsw");
+  await store.save(dbPath);
+}
+
+/**
+ * 查询本地 HNSWLib 数据库，返回最相关的代码片段及相似度分数
+ * Query the local HNSWLib database for the most similar code chunks to the input text.
+ * @param {string} queryText - 查询文本
+ * @param {number} topN - 返回前 N 个结果
+ * @param {string} rootDir - 仓库根目录
+ * @returns {Promise<Array<{file, start, end, text, score}>>}
+ */
+async function queryRagSnippetsHNSW(queryText, topN, rootDir) {
+  const store = await getHNSWStore(rootDir);
+  const results = await store.similaritySearchWithScore(queryText, topN);
+  return results.map(([doc, score]) => ({
+    file: doc.metadata.file,
+    start: doc.metadata.start,
+    end: doc.metadata.end,
+    text: doc.pageContent,
+    score,
+  }));
 }
 
 // 获取用户自定义提示词，应用模板变量
@@ -329,6 +503,13 @@ function isPurittyEnabled() {
   return vscode.workspace
     .getConfiguration("navicode")
     .get("enablePurity", false);
+}
+
+/**
+ * 检查是否启用Rag
+ */
+function isRagEnabled() {
+  return vscode.workspace.getConfiguration("navicode").get("enableRag", false);
 }
 
 /**
@@ -728,6 +909,19 @@ function activateCodeCompletion(context) {
     })
   );
 
+  // 注册Rag的开关命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand("navicode.toggleRag", async () => {
+      const currentValue = isRagEnabled();
+      await vscode.workspace
+        .getConfiguration("navicode")
+        .update("enableRag", !currentValue, true);
+      vscode.window.showInformationMessage(
+        `Rag查询已${!currentValue ? "启用" : "禁用"}`
+      );
+    })
+  );
+
   // 注册编辑提示词命令
   context.subscriptions.push(
     vscode.commands.registerCommand("navicode.editCustomPrompt", async () => {
@@ -753,6 +947,40 @@ function activateCodeCompletion(context) {
         console.log("用户自定义提示词：", newPrompt);
         vscode.window.showInformationMessage("代码补全提示词已更新");
       }
+    })
+  );
+
+  // 注册创建/更新RAG数据库命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand("navicode.updateRagDb", async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showWarningMessage("未打开工作区，无法构建RAG数据库");
+        return;
+      }
+      const rootDir = workspaceFolders[0].uri.fsPath;
+      vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "正在构建RAG数据库...",
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            progress.report({ message: "扫描文件..." });
+            const chunks = await scanAndSplitRepo(rootDir);
+            progress.report({
+              message: `生成向量（共${chunks.length}片段）...`,
+            });
+            // 这里如果你已经有 embedChunks 可以用，也可以直接在 insertChunksToHNSW 里自动生成embedding
+            // 推荐直接插入文本（让 HNSWLib 自动生成embedding），更快更省API配额
+            await insertChunksToHNSW(chunks, rootDir);
+            vscode.window.showInformationMessage("RAG数据库已更新");
+          } catch (err) {
+            vscode.window.showErrorMessage("RAG数据库构建失败: " + err.message);
+          }
+        }
+      );
     })
   );
 

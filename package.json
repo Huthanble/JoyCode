@@ -43,6 +43,11 @@
           "default": false,
           "description": "启用纯净模式。开启后，不会加入除代码外的任何提示词。"
         },
+        "navicode.enableRag": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用Rag查询。开启后，会通过本地构建的Rag仓库来查询相关代码。"
+        },
         "navicode.maxRelatedFileSize": {
           "type": "number",
           "default": 50000,
@@ -89,7 +94,7 @@
             {
               "id": "default",
               "name": "默认模板",
-              "template": " /* 用户提示 */\n{{customPrompt}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}"
+              "template": " /* 用户提示 */\n{{customPrompt}}\n\n{{#if ragContext}}\n/* 相关代码片段（RAG检索）: */\n```\n{{ragContext}}\n```\n{{/if}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}"
             },
             {
               "id": "js_class",
@@ -173,7 +178,7 @@
       {
         "command": "navicode.toggleGitDiff",
         "title": "NaviCode: 切换Git变更历史功能"
-      },
+      },  
       {
         "command": "navicode.toggleReadme",
         "title": "NaviCode: 切换README读取功能"
@@ -189,6 +194,14 @@
       {
         "command": "navicode.togglePurity",
         "title": "NaviCode: 切换纯净模式"
+      },
+      {
+        "command": "navicode.toggleRag",
+        "title": "NaviCode: 切换Rag查询"
+      },
+      {
+        "command": "navicode.updateRagDb",
+        "title": "NaviCode: 创建/更新RAG数据库"
       }
     ],
     "keybindings": [
@@ -233,10 +246,13 @@
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "eslint": "^9.21.0",
-    "glob": "^7.2.0",
     "mocha": "^9.2.0"
   },
   "dependencies": {
+    "glob": "^7.2.0",
+    "@langchain/community": "^0.0.51",
+    "@langchain/openai": "^0.0.16",
+    "hnswlib-node": "^3.0.0",
     "axios": "^0.27.2",
     "dotenv": "^16.5.0",
     "handlebars": "^4.7.8",
