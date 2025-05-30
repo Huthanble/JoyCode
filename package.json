@@ -131,7 +131,6 @@
           "default": "default",
           "description": "当前激活的模板 ID"
         }
-
       }
     },
     "commands": [
@@ -178,7 +177,7 @@
       {
         "command": "navicode.toggleGitDiff",
         "title": "NaviCode: 切换Git变更历史功能"
-      },  
+      },
       {
         "command": "navicode.toggleReadme",
         "title": "NaviCode: 切换README读取功能"
@@ -249,14 +248,15 @@
     "mocha": "^9.2.0"
   },
   "dependencies": {
-    "glob": "^7.2.0",
     "@langchain/community": "^0.0.51",
     "@langchain/openai": "^0.0.16",
-    "hnswlib-node": "^3.0.0",
+    "@xenova/transformers": "^2.11.0",
     "axios": "^0.27.2",
     "dotenv": "^16.5.0",
+    "glob": "^7.2.0",
     "handlebars": "^4.7.8",
+    "hnswlib-node": "^3.0.0",
     "openai": "^4.90.0",
-    "@xenova/transformers": "^2.11.0"
+    "recast": "^0.23.11"
   }
 }
