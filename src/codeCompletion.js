@@ -204,7 +204,8 @@ async function getSuggestion(document, position) {
       return response.choices[0].text.trim();
     }
   } catch (error) {
-    console.error("调用 DeepSeek API 出错:", error);
+    console.error("调用", vscode.workspace.getConfiguration("navicode").get("selectedModel", 'deepseek-chat'));
+    console.error("API 出错:", error);
     return null;
   }
 }
