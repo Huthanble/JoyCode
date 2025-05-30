@@ -5,6 +5,7 @@ const { getOpenAIInstance,getSelectedModel } = require('./openaiClient'); // 确
 const openai=getOpenAIInstance();
 const model = getSelectedModel();
 function activateAiChatCodeGen(context) {
+    const chatHistoryPath = path.join(context.extensionPath, 'chatHistory.json');
     // 在创建 Webview 前先获取并缓存编辑器状态
     let fileContent = '';
     let filePath = '';
@@ -98,18 +99,21 @@ function activateAiChatCodeGen(context) {
     `;
 
     let chatHistory = []; // 初始化聊天历史记录
-    // 添加消息到历史记录
-    function addToChatHistory(role, content) {
-        chatHistory.push({
-            role: ['system', 'user', 'assistant'].includes(role) ? role : 'user',
-            content: String(content)
-        });
-        
-        // 限制历史记录长度，只保留最近10条
-        if (chatHistory.length > 10) {
-            chatHistory = chatHistory.slice(-10);
+    try {
+            if (fs.existsSync(chatHistoryPath)) {
+                chatHistory = JSON.parse(fs.readFileSync(chatHistoryPath, 'utf-8'));
+            }
+    } catch (e) {
+            chatHistory = [];
+    }
+    function saveChatHistory() {
+        try {
+            fs.writeFileSync(chatHistoryPath, JSON.stringify(chatHistory, null, 2), 'utf-8');
+        } catch (e) {
+            console.error('保存聊天记录失败:', e);
         }
     }
+    
 
     // 监听前端发送的消息
     panel.webview.onDidReceiveMessage(async (message) => {
@@ -177,7 +181,14 @@ function activateAiChatCodeGen(context) {
             return;
         }
 
-        addToChatHistory('user', userInput);
+        chatHistory.push({
+            role: 'user',
+            content: String(userInput)
+        });
+        if (chatHistory.length > 50) {
+            chatHistory = chatHistory.slice(-50);
+        }
+        saveChatHistory();
         
         // 拼接上下文文件内容
         let contextPrompt = '';
@@ -205,7 +216,14 @@ function activateAiChatCodeGen(context) {
             });
 
             const reply = response.choices[0]?.message?.content || "AI 无法生成回复。";
-            addToChatHistory('assistant', reply);
+            chatHistory.push({
+            role: 'assistant',
+            content: String(reply)
+        });
+        if (chatHistory.length > 50) {
+            chatHistory = chatHistory.slice(-50);
+        }
+        saveChatHistory();
             panel.webview.postMessage({ command: "response", text: reply });
         } catch (error) {
             console.error("OpenAI 请求失败:", error);
@@ -253,6 +271,10 @@ function activateAiChatCodeGen(context) {
                 } else {
                     chatHistory.push({ role: 'assistant', content: reply });
                 }
+                if (chatHistory.length > 50) {
+                    chatHistory = chatHistory.slice(-50);
+                }
+                saveChatHistory();
                 panel.webview.postMessage({ command: "response", text: reply });
             } catch (error) {
                 console.error("OpenAI 请求失败:", error);
