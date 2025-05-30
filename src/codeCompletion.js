@@ -8,6 +8,18 @@ const Handlebars = require("handlebars");
 const glob = require("glob");
 const { HNSWLib } = require("@langchain/community/vectorstores/hnswlib");
 const { OpenAIEmbeddings } = require("@langchain/openai"); // 用于检索时自动embedding
+const { getEmbedding } = require('./embedding-local');
+
+// 包装一个兼容 langchain 的 embedding 对象
+class LocalEmbeddings {
+  async embedDocuments(texts) {
+    // texts: string[]
+    return Promise.all(texts.map(t => getEmbedding(t)));
+  }
+  async embedQuery(text) {
+    return getEmbedding(text);
+  }
+}
 
 // 用于显示加载提示的装饰器
 let loadingDecorationType = null;
@@ -77,6 +89,8 @@ async function getSuggestion(document, position) {
       const rootDir = workspaceFolders[0].uri.fsPath;
       // 你可以根据实际情况调整 topN
       ragContext = await getRagContext(prompt, 3, rootDir);
+
+      console.log("rag:",ragContext);
     }
   }
 
@@ -295,26 +309,46 @@ let hnswStore = null;
 
 /**
  * 初始化或加载本地 HNSWLib 向量数据库
- * Initialize or load a local HNSWLib vector database.
  * @param {string} rootDir - 仓库根目录 / Repository root directory
  * @returns {Promise<HNSWLib>} - HNSWLib 实例 / HNSWLib instance
  */
+
+//调用gpt4自带的embedding模型(由于gpt4api的问题，该方法暂时不可用)
+// async function getHNSWStore(rootDir) {
+//   const dbPath = path.join(rootDir, ".navicode_hnsw");
+//   if (hnswStore) return hnswStore;
+
+//   if (fs.existsSync(dbPath)) {
+//     // 如果数据库文件已存在，则加载
+//     // Load existing database if exists
+//     hnswStore = await HNSWLib.load(
+//       dbPath,
+//       new OpenAIEmbeddings({ openAIApiKey: process.env.gpt4 })
+//     );
+//   } else {
+//     // 否则新建一个数据库
+//     // Otherwise, create a new one
+//     hnswStore = new HNSWLib(
+//       new OpenAIEmbeddings({ openAIApiKey: process.env.gpt4 }),
+//       { space: "cosine" }
+//     );
+//   }
+//   return hnswStore;
+// }
+
+//调用本地下载的embedding模型
 async function getHNSWStore(rootDir) {
   const dbPath = path.join(rootDir, ".navicode_hnsw");
   if (hnswStore) return hnswStore;
 
   if (fs.existsSync(dbPath)) {
-    // 如果数据库文件已存在，则加载
-    // Load existing database if exists
     hnswStore = await HNSWLib.load(
       dbPath,
-      new OpenAIEmbeddings({ openAIApiKey: process.env.gpt4 })
+      new LocalEmbeddings()
     );
   } else {
-    // 否则新建一个数据库
-    // Otherwise, create a new one
     hnswStore = new HNSWLib(
-      new OpenAIEmbeddings({ openAIApiKey: process.env.gpt4 }),
+      new LocalEmbeddings(),
       { space: "cosine" }
     );
   }

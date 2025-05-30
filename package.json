@@ -256,6 +256,7 @@
     "axios": "^0.27.2",
     "dotenv": "^16.5.0",
     "handlebars": "^4.7.8",
-    "openai": "^4.90.0"
+    "openai": "^4.90.0",
+    "@xenova/transformers": "^2.11.0"
   }
 }
