@@ -6,6 +6,28 @@ const openai=getOpenAIInstance();
 const model = getSelectedModel();
 function activateAiChatCodeGen(context) {
     const chatHistoryPath = path.join(context.extensionPath, 'chatHistory.json');
+    const systemPromptPath = path.join(context.extensionPath, 'systemPrompt.json');
+    
+    // 新增：读取 systemPrompt.json 并发送给前端
+let systemPromptData = {
+            aiRole: '假设你是一名经验丰富的编程导师，能提供实用的建议和指导',
+            aiScenario: '帮助用户了解编程基础和核心概念。通过实际项目实践和提高编程技能。',
+            aiStyle: '通俗易懂、详细分步讲解。学习用户的代码风格，模仿用户的代码风格来编写代码',
+            aiOutput: 'Markdown代码块、用户用何种语言提问，就用何种语言回答'
+        };
+        try {
+            if (fs.existsSync(systemPromptPath)) {
+                systemPromptData = JSON.parse(fs.readFileSync(systemPromptPath, 'utf-8'));
+            }
+        } catch (e) {
+            console.error('读取 systemPrompt.json 失败:', e);
+        }
+        setTimeout(() => {
+            panel.webview.postMessage({
+                command: 'initSystemPrompt',
+                data: systemPromptData
+            });
+        }, 300);
     // 在创建 Webview 前先获取并缓存编辑器状态
     let fileContent = '';
     let filePath = '';
@@ -118,6 +140,13 @@ function activateAiChatCodeGen(context) {
     // 监听前端发送的消息
     panel.webview.onDidReceiveMessage(async (message) => {
 
+        if (message.command === 'saveSystemPrompt') {
+            try {
+                fs.writeFileSync(systemPromptPath, JSON.stringify(message.data, null, 2), 'utf-8');
+            } catch (e) {
+                vscode.window.showErrorMessage('保存System Prompt失败: ' + e.message);
+            }
+        }
         if (message.command === 'removeContextFile') {
             contextFiles = contextFiles.filter(f => f.filePath !== message.filePath);
             console.log(contextFiles, message.filePath);

@@ -354,9 +354,24 @@
 </button>  
 <div id="system-modal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:999;
     background:rgba(0,0,0,0.3);align-items:center;justify-content:center;">
-    <div style="background:#222;padding:24px 20px;border-radius:8px;min-width:320px;max-width:90vw;">
-        <div style="font-size:16px;font-weight:bold;color:#fff;margin-bottom:8px;">编辑 System Prompt</div>
-        <textarea id="system-prompt-input" style="width:100%;height:80px;border-radius:4px;padding:8px;font-size:14px;">你是代码助手，请用简洁、专业的方式回答用户问题。</textarea>
+    <div style="background:#222;padding:24px 20px;border-radius:8px;min-width:340px;max-width:90vw;">
+        <div style="font-size:16px;font-weight:bold;color:#fff;margin-bottom:8px;">自定义AI提示词</div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">AI角色：</label>
+            <input id="ai-role-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px;height:36px;" placeholder="如：代码助手、编程老师">
+        </div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">情景模拟：</label>
+            <input id="ai-scenario-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px;height:36px;" placeholder="如：你正在帮助初学者理解代码">
+        </div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">方式与风格：</label>
+            <input id="ai-style-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px;height:36px;" placeholder="如：通俗易懂、详细分步讲解">
+        </div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">输出形式：</label>
+            <input id="ai-output-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px; height:36px;" placeholder="如：Markdown代码块、中文回答">
+        </div>
         <div style="margin-top:12px;text-align:right;">
             <button id="cancel-system-btn" style="margin-right:10px;">取消</button>
             <button id="save-system-btn" style="background:#4a90e2;color:#fff;">确定</button>
@@ -371,13 +386,22 @@
         sendButton.addEventListener('click', sendMessage);
         const statusDiv=document.getElementById('status');
         let contextFiles = []; // 存储上下文文件
-        let systemPrompt = '你是代码助手，请用简洁、专业的方式回答用户问题。';
+        let aiRole = '假设你是一名经验丰富的编程导师，能提供实用的建议和指导';
+        let aiScenario = '帮助用户了解编程基础和核心概念。通过实际项目实践和提高编程技能。';
+        let aiStyle = '通俗易懂、详细分步讲解。学习用户的代码风格，模仿用户的代码风格来编写代码';
+        let aiOutput = 'Markdown代码块、用户用何种语言提问，就用何种语言回答';
         
-        
+        // 拼接完整 system prompt
+        function buildSystemPrompt() {
+            return `你的身份：${aiRole}。\n情景模拟：${aiScenario}。\n方式与风格：${aiStyle}。\n输出形式：${aiOutput}。`;
+        }
         // 打开弹窗
         document.getElementById('edit-system-btn').onclick = function() {
-            document.getElementById('system-modal').style.display = 'flex';
-            document.getElementById('system-prompt-input').value = systemPrompt;
+                document.getElementById('system-modal').style.display = 'flex';
+                document.getElementById('ai-role-input').value = aiRole;
+                document.getElementById('ai-scenario-input').value = aiScenario;
+                document.getElementById('ai-style-input').value = aiStyle;
+                document.getElementById('ai-output-input').value = aiOutput;
         };
         // 取消
         document.getElementById('cancel-system-btn').onclick = function() {
@@ -385,7 +409,21 @@
         };
         // 保存
         document.getElementById('save-system-btn').onclick = function() {
-            systemPrompt = document.getElementById('system-prompt-input').value.trim() || systemPrompt;
+            aiRole = document.getElementById('ai-role-input').value.trim() || aiRole;
+            aiScenario = document.getElementById('ai-scenario-input').value.trim() || aiScenario;
+            aiStyle = document.getElementById('ai-style-input').value.trim() || aiStyle;
+            aiOutput = document.getElementById('ai-output-input').value.trim() || aiOutput;
+            systemPrompt = buildSystemPrompt();
+            
+            vscode.postMessage({
+                command: 'saveSystemPrompt',
+                data: {
+                    aiRole,
+                    aiScenario,
+                    aiStyle,
+                    aiOutput
+                }
+            });
             document.getElementById('system-modal').style.display = 'none';
         };
 
@@ -430,11 +468,17 @@
                     `当前文件&nbsp;&nbsp; ${iconHtml} &nbsp; <span title="当前上下文：${message.filePath}" style="background-color:transparent;">${message.fileName}</span>`;
             }
 
-            if (message.command === 'chatHistory') {
-                // 渲染聊天记录，目前还没实现
-                message.history.forEach((msg) => {
-                    appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
-                });
+            if (message.command === 'initSystemPrompt') {
+                // 自动填充变量和输入框
+                aiRole = message.data.aiRole || aiRole;
+                aiScenario = message.data.aiScenario || aiScenario;
+                aiStyle = message.data.aiStyle || aiStyle;
+                aiOutput = message.data.aiOutput || aiOutput;
+                // 如果弹窗已打开，也可以同步填充输入框
+                document.getElementById('ai-role-input').value = aiRole;
+                document.getElementById('ai-scenario-input').value = aiScenario;
+                document.getElementById('ai-style-input').value = aiStyle;
+                document.getElementById('ai-output-input').value = aiOutput;
             }
 
             if (message.command === 'response') {
