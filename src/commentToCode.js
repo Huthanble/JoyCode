@@ -1,8 +1,6 @@
 const vscode = require('vscode');
 const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
 const { detectLanguage, runCode } = require('./tools');
-const openai = getOpenAIInstance();
-const model = getSelectedModel();
 async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
   let attempt = 0;
   while (attempt < maxAttempts) {
@@ -10,7 +8,8 @@ async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
     if (result.success) return { success: true, code, output: result.message };
     
     const feedbackPrompt = `你根据以下注释生成了这段代码：\n\n注释: ${userKeywords}\n\n代码：\n\n\`\`\`${lang}\n${code}\n\`\`\`\n\n运行时报错如下：\n${result.message}\n\n请只输出修复后的完整代码（无额外解释）`;
-    
+    const openai = getOpenAIInstance();
+    const model = getSelectedModel();
     const response = await openai.completions.create({
       model: model,
       prompt: feedbackPrompt,
@@ -74,6 +73,9 @@ async function generateCodeFromComment() {
         },
         async (progress, token) => {
           try {
+            const openai = getOpenAIInstance();
+            const model = getSelectedModel();
+            console.log('当前模型:', getSelectedModel());
             const response = await openai.completions.create({
               model: model,
               prompt: prompt,
@@ -104,6 +106,9 @@ async function generateCodeFromComment() {
         },
         async (progress, token) => {
           try {
+            const openai = getOpenAIInstance();
+            const model = getSelectedModel();
+            
             const response = await openai.completions.create({
               model: model,
               prompt: prompt,
