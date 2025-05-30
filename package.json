@@ -38,6 +38,16 @@
           "default": false,
           "description": "启用关联文件上下文。开启后，会自动分析导入语句并包含相关文件内容。"
         },
+        "navicode.enablePurity": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用纯净模式。开启后，不会加入除代码外的任何提示词。"
+        },
+        "navicode.enableRag": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用Rag查询。开启后，会通过本地构建的Rag仓库来查询相关代码。"
+        },
         "navicode.maxRelatedFileSize": {
           "type": "number",
           "default": 50000,
@@ -77,6 +87,49 @@
             "gpt-4",
             "gpt-3.5"
           ]
+        },
+        "navicode.templates": {
+          "type": "array",
+          "default": [
+            {
+              "id": "default",
+              "name": "默认模板",
+              "template": " /* 用户提示 */\n{{customPrompt}}\n\n{{#if ragContext}}\n/* 相关代码片段（RAG检索）: */\n```\n{{ragContext}}\n```\n{{/if}}\n\n{{#if includeReadme}}\n/* README */\n```\n{{readme}}\n```\n{{/if}}\n\n{{#if includeDiff}}\n/* DIFF */\n```diff\n{{fileDiff}}\n```\n{{/if}}\n\n{{#if includeRelatedFiles}}\n/* 关联文件 */\n{{#each relatedFiles}}文件: {{this.path}}\n```\n{{this.content}}\n```\n{{/each}}\n{{/if}}\n\n/* 上下文 */\n文件: {{fileName}}\n语言: {{languageId}}\n前缀代码:\n{{prefix}}"
+            },
+            {
+              "id": "js_class",
+              "name": "JS 类模板",
+              "template": "/* JavaScript 类 */\nclass {{className}} {\n  constructor() {\n    {{customPrompt}}\n  }\n}\n"
+            },
+            {
+              "id": "py_module",
+              "name": "Python 模块模板",
+              "template": "# -*- coding: utf-8 -*-\n\"\"\"\n模块：{{fileName}}\n\"\"\"\n\n{{customPrompt}}\n\nif __name__ == \"__main__\":\n    pass\n"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "模板唯一标识"
+              },
+              "name": {
+                "type": "string",
+                "description": "模板名称，供下拉列表显示"
+              },
+              "template": {
+                "type": "string",
+                "description": "Prompt 提示词内容"
+              }
+            }
+          },
+          "description": "可管理的多个 Prompt 模板列表"
+        },
+        "navicode.activeTemplate": {
+          "type": "string",
+          "default": "default",
+          "description": "当前激活的模板 ID"
         }
       }
     },
@@ -132,6 +185,22 @@
       {
         "command": "navicode.switchModel",
         "title": "切换 AI 模型"
+      },
+      {
+        "command": "navicode.configureTemplate",
+        "title": "NaviCode: 用户自定义全局提示词模板"
+      },
+      {
+        "command": "navicode.togglePurity",
+        "title": "NaviCode: 切换纯净模式"
+      },
+      {
+        "command": "navicode.toggleRag",
+        "title": "NaviCode: 切换Rag查询"
+      },
+      {
+        "command": "navicode.updateRagDb",
+        "title": "NaviCode: 创建/更新RAG数据库"
       }
     ],
     "keybindings": [
@@ -176,14 +245,18 @@
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "eslint": "^9.21.0",
-    "glob": "^7.2.0",
     "mocha": "^9.2.0"
   },
   "dependencies": {
+    "@langchain/community": "^0.0.51",
+    "@langchain/openai": "^0.0.16",
+    "@xenova/transformers": "^2.11.0",
     "axios": "^0.27.2",
     "dotenv": "^16.5.0",
+    "glob": "^7.2.0",
+    "handlebars": "^4.7.8",
+    "hnswlib-node": "^3.0.0",
     "openai": "^4.90.0",
-    "tree-sitter": "^0.21.1",
-    "tree-sitter-cpp": "^0.23.4"
+    "recast": "^0.23.11"
   }
 }
