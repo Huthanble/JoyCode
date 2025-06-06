@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { getOpenAIInstance,getSelectedModel } = require('./openaiClient');
+const { getOpenAIInstance,getSelectedModel,modelConfigs} = require('./openaiClient');
 const { detectLanguage, runCode } = require('./tools');
 async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
   let attempt = 0;
@@ -9,14 +9,26 @@ async function retryWithFeedback(userKeywords, code, lang, maxAttempts = 2) {
     
     const feedbackPrompt = `你根据以下注释生成了这段代码：\n\n注释: ${userKeywords}\n\n代码：\n\n\`\`\`${lang}\n${code}\n\`\`\`\n\n运行时报错如下：\n${result.message}\n\n请只输出修复后的完整代码（无额外解释）`;
     const openai = getOpenAIInstance();
-    const model = getSelectedModel();
-    const response = await openai.completions.create({
+    const selectedModel = getSelectedModel();
+    const model = modelConfigs[selectedModel].model;
+
+    const response = await openai.chat.completions.create({
       model: model,
-      prompt: feedbackPrompt,
+      messages: [
+        { role: 'system', content: `你是一个代码生成助手` },
+        { role: 'user', content: feedbackPrompt }
+      ],
       max_tokens: 1500
     });
+    const newCode = response.choices[0]?.message?.content.trim();
 
-    const newCode = response.choices[0]?.text.trim();
+    // const response = await openai.completions.create({
+    //   model: model,
+    //   prompt: feedbackPrompt,
+    //   max_tokens: 1500
+    // });
+
+    // const newCode = response.choices[0]?.text.trim();
     code = newCode;
     attempt++;
   }
@@ -74,20 +86,32 @@ async function generateCodeFromComment() {
         async (progress, token) => {
           try {
             const openai = getOpenAIInstance();
-            const model = getSelectedModel();
-            console.log('当前模型:', getSelectedModel());
-            const response = await openai.completions.create({
+            const selectedModel = getSelectedModel();
+            const model = modelConfigs[selectedModel].model;
+            console.log('当前模型:', model);
+            
+            const response = await openai.chat.completions.create({
               model: model,
-              prompt: prompt,
+              messages: [
+                { role: 'system', content: `你是一个${languageId}代码生成助手` },
+                { role: 'user', content: prompt }
+              ],
               max_tokens: 1500
             });
-
-            const generatedCode = response.choices[0]?.text.trim();
+            const generatedCode = response.choices[0]?.message?.content.trim();
+            // const response = await openai.completions.create({
+            //   model: model,
+            //   prompt: prompt,
+            //   max_tokens: 1500
+            // });
+            // const generatedCode = response.choices[0]?.text.trim();
+            
             if (generatedCode) {
               editor.edit(editBuilder => editBuilder.insert(new vscode.Position(position.line + 1, 0), `${generatedCode}\n`));
               handleGeneratedCode(userKeywords, generatedCode, languageId);
             }
           } catch (error) {
+            console.error('OpenAI API 错误:', error?.response?.data || error.message || error);
             vscode.window.showErrorMessage('生成代码失败，请检查 API 设置。');
           }
         }
@@ -107,15 +131,26 @@ async function generateCodeFromComment() {
         async (progress, token) => {
           try {
             const openai = getOpenAIInstance();
-            const model = getSelectedModel();
-            
-            const response = await openai.completions.create({
-              model: model,
-              prompt: prompt,
-              max_tokens: 500
-            });
+            const selectedModel = getSelectedModel();
+            const model = modelConfigs[selectedModel].model;
 
-            const generatedComment = response.choices[0]?.text.trim();
+            const response = await openai.chat.completions.create({
+              model: model,
+              messages: [
+                { role: 'system', content: `你是一个${languageId}代码生成助手` },
+                { role: 'user', content: prompt }
+              ],
+              max_tokens: 1500
+            });
+            const generatedComment = response.choices[0]?.message?.content.trim();
+
+            // const response = await openai.completions.create({
+            //   model: model,
+            //   prompt: prompt,
+            //   max_tokens: 500
+            // });
+
+            // const generatedComment = response.choices[0]?.text.trim();
             if (generatedComment) {
               editor.edit(editBuilder => editBuilder.insert(new vscode.Position(selection.start.line, 0), `// ${generatedComment}\n`));
               vscode.window.showInformationMessage('注解生成成功 ✅');

@@ -46,8 +46,8 @@ function wrapCppFunctionForTest(code,lang) {
 
       // 生成 main 测试代码
       const pytestMain = `
-        if __name__ == "__main__":
-            print("Test result:", ${pyfuncName}(${pyparams}))
+if __name__ == "__main__":
+    print("Test result:", ${pyfuncName}(${pyparams}))
         `;
       return code + '\n' + pytestMain;
     case 'javascript':
@@ -72,11 +72,11 @@ function wrapCppFunctionForTest(code,lang) {
       const javaparams = javaMatch[3].split(',').map(p => p.trim().split(' ')[1] || '0').join(', ');
       // 生成 main 测试代码
       const javatestMain = `
-        public class Test {
-            public static void main(String[] args) {
-                ${javafuncName}(${javaparams});
-            }
-        }
+public class Test {
+    public static void main(String[] args) {
+        ${javafuncName}(${javaparams});
+    }
+}
       `;
       return code + '\n' + javatestMain;
     case 'cpp':
@@ -110,9 +110,25 @@ function wrapCppFunctionForTest(code,lang) {
 
       // 获取参数数量
       const paramList = funcNode.childForFieldName('parameters');
-      const paramCount = paramList ? paramList.namedChildCount : 0;
-      const cppparams = Array(paramCount).fill('1').join(', ');
-
+      let paramCount = 0;
+      let cppparams = '';
+      if (paramList) {
+        paramCount = paramList.namedChildCount;
+        if (paramCount > 0) {
+          cppparams = Array(paramCount).fill('1').join(', ');
+        }
+      }
+      // fallback: 如果参数数量为0，尝试用正则兜底
+      if (paramCount === 0) {
+        const funcText = funcNode.text;
+        const match = funcText.match(/\(([^)]*)\)/);
+        if (match && match[1].trim()) {
+          const paramListRaw = match[1].split(',').map(s => s.trim()).filter(Boolean);
+          if (paramListRaw.length > 0) {
+            cppparams = Array(paramListRaw.length).fill('1').join(', ');
+          }
+        }
+      }
       // 获取函数名
       const declNode = funcNode.childForFieldName('declarator');
       let cppfuncName = 'func';
@@ -129,11 +145,11 @@ function wrapCppFunctionForTest(code,lang) {
 
       // 生成 main 测试代码
       const cpptestMain = `
-    int main() {
-      auto result = ${cppfuncName}(${cppparams});
-      std::cout << "Test result: " << result << std::endl;
-      return 0;
-    }
+int main() {
+  auto result = ${cppfuncName}(${cppparams});
+  std::cout << "Test result: " << result << std::endl;
+  return 0;
+}
     `;
       return codeWithInclude + '\n' + cpptestMain;
     default:
