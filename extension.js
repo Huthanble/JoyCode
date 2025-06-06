@@ -1,12 +1,10 @@
 const vscode = require('vscode');
 const { activateCodeCompletion } = require('./src/codeCompletion');
-const { activateAiChatCodeGen } = require('./src/aiChatCodeGen');
 const { activateCommentToCode } = require('./src/commentToCode');
 const {activateTempArea} = require('./src/TempArea');
 const { deactivateCodeCompletion } = require('./src/codeCompletion');
-const { deactivateAiChatCodeGen } = require('./src/aiChatCodeGen');
 const { deactivateCommentToCode } = require('./src/commentToCode');
-
+const ChatViewProvider = require('./src/aiChatCodeGen');
 
 function activate(context) {
   context.subscriptions.push(
@@ -27,9 +25,19 @@ function activate(context) {
   activateTempArea(context);
   activateCodeCompletion(context);
   activateCommentToCode(context);
-  let disposable = vscode.commands.registerCommand("navicode.openChat", () => {
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+        'navicodeChatView',
+        new ChatViewProvider(context),
+        { webviewOptions: { retainContextWhenHidden: true } }
+    )
+);
+
+
+  let disposable = vscode.commands.registerCommand("navicode.openChat", async () => {
     // 只有执行 openChat 命令时才会打开 AI Chat 界面
-	activateAiChatCodeGen(context);
+    await vscode.commands.executeCommand('workbench.action.toggleAuxiliaryBar', true);
+    
   });
 
   context.subscriptions.push(disposable);
