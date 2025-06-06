@@ -196,7 +196,7 @@
             box-sizing: border-box;
             width: 100%;
             min-width: 0;
-            min-height: 60px;
+            min-height: 80px;
         }
         #send {
             margin-left: 10px;
@@ -262,7 +262,7 @@
             background-position: right 8px center;
             background-size: 18px 18px;
             position: absolute;
-            right: 65px;
+            right: 85px;
             bottom: 4px;
             z-index: 2;
             margin-bottom: 0;
@@ -270,21 +270,115 @@
         #model-select:focus {
             border-color: #7a7b7c;
         }
+        #scroll-bottom-btn {
+            position: fixed;
+            right: 24px;   
+            top: 35px;    
+            bottom: auto;  
+
+        }
+        #edit-system-btn {
+            margin-left: 10px;
+            padding: 10px;
+            background-color: transparent;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+            color: #fff; /* 白色图标 */
+            box-sizing: border-box;
+            transition: background 0.2s;
+        }
+        #edit-system-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        #edit-system-btn i {
+            font-size: 18px;
+            color: #fff; /* 保证图标也是白色 */
+        }
+        #voice-btn {
+            margin-left: 6px;
+            margin-top: 45px;
+            background-color: transparent;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px; /* 调整图标大小 */
+            color: var(--vscode-button-foreground);
+            box-sizing: border-box;
+            position:absolute;
+            color: #353434;
+        }
+        #voice-btn:focus {
+            border-color: #7a7b7c;
+        }
+        @keyframes spin {
+        100% { transform: rotate(360deg); }
+        }
+        .listening {
+        color: #e74c3c !important; /* 红色提示 */
+        animation: spin 1s linear infinite;
+        }
+        #new-chat-btn {
+                background: transparent;
+                border: none;
+                color: #aaa;
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                margin-right: 7px;
+                transition: background 0.2s;
+        }
     </style>
 </head>
 <body>
     <div id="chat-container">
-        <div id="messages">
-            <div id="welcome-message" class="message ai"></div>
+        <div id="custom-navbar" style="
+            width: 100%;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            background: var(--vscode-sideBar-background, #23272e);
+            border-bottom: 1px solid #222;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        ">
+        <div id="chat-title" style="display:none;text-align:center;font-weight:bold;font-size:18px;margin:16px 0;"></div>
+        <button id="new-chat-btn" title="新建聊天窗口">
+                    <i class="fas fa-plus"></i>
+                </button>
         </div>
-        <div id="status" style="text-align: center; font-size: 12px; color: gray; display: none;">正在等待AI回复...</div>
+        
+        <div id="messages">
+            <div id="welcome-message" class="message ai">
+                
+            </div>
+            <div id="welcome-actions" style="text-align:center; margin-top:130px;">
+                <img src="__ROBOT_IMG_URI__" id="welcome-logo" style="width:80px;height:80px;display:block;margin:0 auto 12px auto;" alt="NaviCode Logo">
+                <i class="fas fa-link" style="color:white;"></i>
+                <span style="margin-right:16px; font-size: 15px;padding: 10px;">链接上下文文件</span>
+                <br>
+                <br>
+                <i class="fas fa-cog"></i>
+                <span style="margin-right:16px;font-size: 15px;padding: 10px;">设置系统提示词</span>
+            </div>
+        </div>
+        <!-- <div id="status" style="text-align: center; font-size: 12px; color: gray; display: none;">正在等待AI回复...</div> -->
         <div id="input-container">
             
             <div id="file-container">
                 <button id="add-context-btn" title="添加上下文文件" style="border:none;background:transparent;cursor:pointer;">
                 <i class="fas fa-link" style="color:white;"></i>
                 </button>
-                 <div id="file-info" style="font-size:12px;display:flex;align-items:center;"></div>
+                <div id="file-info" style="font-size:12px;display:flex;align-items:center;"></div>
+                <div id="context-files-list" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
                 </div>
             <div class="input-row" style="position: relative;">
                 
@@ -292,17 +386,66 @@
                 <button id="send" title="发送消息">
                     <i class="fas fa-paper-plane"></i>
                 </button>
+               
                 <select id="model-select" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #bdbdbd;">
                     <option value="deepseek-chat">deepseek-chat</option>
                     <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
                     <option value="gpt-4">gpt-4</option>
                     <!-- 你可以根据需要添加更多模型 -->
                 </select>
+                <button id="edit-system-btn" title="修改System Prompt" style="margin-left:10px;">
+                    <i class="fas fa-cog"></i>
+                </button>
             </div>
             
         </div>
     </div>
-
+      <button id="scroll-bottom-btn" title="滚动到底部" style="
+    position: fixed;
+    right: 24px;
+    bottom: 32px;
+    z-index: 99;
+    background: #444;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    cursor: pointer;
+">
+    <i class="fas fa-arrow-down"></i>
+</button>  
+<div id="system-modal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:999;
+    background:rgba(0,0,0,0.3);align-items:center;justify-content:center;">
+    <div style="background:#222;padding:24px 20px;border-radius:8px;min-width:340px;max-width:90vw;">
+        <div style="font-size:16px;font-weight:bold;color:#fff;margin-bottom:8px;">自定义AI提示词</div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">AI角色：</label>
+            <input id="ai-role-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px;height:36px;" placeholder="如：代码助手、编程老师">
+        </div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">情景模拟：</label>
+            <input id="ai-scenario-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px;height:36px;" placeholder="如：你正在帮助初学者理解代码">
+        </div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">方式与风格：</label>
+            <input id="ai-style-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px;height:36px;" placeholder="如：通俗易懂、详细分步讲解">
+        </div>
+        <div style="margin-bottom:8px;">
+            <label style="color:#fff;">输出形式：</label>
+            <input id="ai-output-input" style="width:90%;padding:6px 8px;border-radius:4px;margin-bottom:6px; height:36px;" placeholder="如：Markdown代码块、中文回答">
+        </div>
+        <div style="margin-top:12px;text-align:right;">
+            <button id="cancel-system-btn" style="margin-right:10px;">取消</button>
+            <button id="save-system-btn" style="background:#4a90e2;color:#fff;">确定</button>
+        </div>
+    </div>
+</div>
     <script>
         const vscode = acquireVsCodeApi();
         const messagesDiv = document.getElementById('messages');//在html中通过id查找元素
@@ -310,17 +453,56 @@
         const sendButton = document.getElementById('send');
         sendButton.addEventListener('click', sendMessage);
         const statusDiv=document.getElementById('status');
-        
+        let contextFiles = []; // 存储上下文文件
+        let aiRole = '假设你是一名经验丰富的编程导师，能提供实用的建议和指导';
+        let aiScenario = '帮助用户了解编程基础和核心概念。通过实际项目实践和提高编程技能。';
+        let aiStyle = '通俗易懂、详细分步讲解。学习用户的代码风格，模仿用户的代码风格来编写代码';
+        let aiOutput = 'Markdown代码块、用户用何种语言提问，就用何种语言回答';
+        document.getElementById('new-chat-btn').onclick = function() {
+            vscode.postMessage({ command: 'newChatWindow' });
+        };
+        // 拼接完整 system prompt
+        function buildSystemPrompt() {
+            return `你的身份：${aiRole}。\n情景模拟：${aiScenario}。\n方式与风格：${aiStyle}。\n输出形式：${aiOutput}。`;
+        }
+        let systemPrompt = buildSystemPrompt();
+        // 打开弹窗
+        document.getElementById('edit-system-btn').onclick = function() {
+                document.getElementById('system-modal').style.display = 'flex';
+                document.getElementById('ai-role-input').value = aiRole;
+                document.getElementById('ai-scenario-input').value = aiScenario;
+                document.getElementById('ai-style-input').value = aiStyle;
+                document.getElementById('ai-output-input').value = aiOutput;
+        };
+        // 取消
+        document.getElementById('cancel-system-btn').onclick = function() {
+            document.getElementById('system-modal').style.display = 'none';
+        };
+        // 保存
+        document.getElementById('save-system-btn').onclick = function() {
+            aiRole = document.getElementById('ai-role-input').value.trim() || aiRole;
+            aiScenario = document.getElementById('ai-scenario-input').value.trim() || aiScenario;
+            aiStyle = document.getElementById('ai-style-input').value.trim() || aiStyle;
+            aiOutput = document.getElementById('ai-output-input').value.trim() || aiOutput;
+            systemPrompt = buildSystemPrompt();
+            
+            vscode.postMessage({
+                command: 'saveSystemPrompt',
+                data: {
+                    aiRole,
+                    aiScenario,
+                    aiStyle,
+                    aiOutput
+                }
+            });
+            document.getElementById('system-modal').style.display = 'none';
+        };
+
         // 在插件加载时显示欢迎消息
         window.addEventListener('DOMContentLoaded', () => {
             typeWelcomeMessage('欢迎使用navicode！', 'welcome-message');
-
-            // 确保 #messages 容器有内容撑开布局
-        // if (!messagesDiv.hasChildNodes()) {
-        //     const placeholder = document.createElement('div');
-        //     placeholder.style.minHeight = '50px'; // 设置占位高度
-        //     messagesDiv.appendChild(placeholder);
-        // }
+            
+         
         });
         document.getElementById('add-context-btn').addEventListener('click', () => {
             // 这里可以弹出文件选择框，或发送消息给扩展主机
@@ -328,6 +510,19 @@
         });
         window.addEventListener('message', (event) => {
             const message = event.data;
+            if (message.command === 'setChatTitle') {
+                const titleDiv = document.getElementById('chat-title');
+                titleDiv.textContent = message.title;
+                console.log("标题：", message.title);
+                titleDiv.style.display = '';
+            }
+            if (message.command === 'clearChat') {
+                // 清空消息列表
+                messagesDiv.innerHTML = '';
+                // 恢复欢迎语和欢迎 actions
+                document.getElementById('welcome-message').style.display = '';
+                document.getElementById('welcome-actions').style.display = '';
+            }
             if (message.command === 'fileInfo') {
                 // 选择图标
                 let iconHtml = '';
@@ -352,22 +547,33 @@
                     `当前文件&nbsp;&nbsp; ${iconHtml} &nbsp; <span title="当前上下文：${message.filePath}" style="background-color:transparent;">${message.fileName}</span>`;
             }
 
-            if (message.command === 'chatHistory') {
-                // 渲染聊天记录，目前还没实现
-                message.history.forEach((msg) => {
-                    appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
-                });
+            if (message.command === 'initSystemPrompt') {
+                // 自动填充变量和输入框
+                aiRole = message.data.aiRole || aiRole;
+                aiScenario = message.data.aiScenario || aiScenario;
+                aiStyle = message.data.aiStyle || aiStyle;
+                aiOutput = message.data.aiOutput || aiOutput;
+                // 如果弹窗已打开，也可以同步填充输入框
+                document.getElementById('ai-role-input').value = aiRole;
+                document.getElementById('ai-scenario-input').value = aiScenario;
+                document.getElementById('ai-style-input').value = aiStyle;
+                document.getElementById('ai-output-input').value = aiOutput;
             }
 
             if (message.command === 'response') {
-                hideStatus(); // 隐藏状态
+                // hideStatus(); // 隐藏状态
                 appendMessage('ai', message.text, true,messagesDiv.children.length); // 渲染 Markdown
             }
 
             sendButton.disabled = false; // 启用发送按钮
             sendButton.style.cursor = 'pointer'; // 恢复鼠标样式
             sendButton.style.opacity = '1'; // 恢复按钮透明度
-        
+            
+            if (message.command === 'contextFiles') {
+                // message.files 是后端传来的上下文文件数组
+                contextFiles = message.files;
+                renderContextFiles();
+            }
             
         });
         //给输入框绑定监听，这样只有当用户在输入框中按下回车时，才会执行 sendMessage()
@@ -384,15 +590,17 @@
             const model = document.getElementById('model-select').value;// 获取选中的模型
             if (text) {
                 const welcomeMessage = document.getElementById('welcome-message');
+                const welcomeActions = document.getElementById('welcome-actions');
                 if (welcomeMessage) {
                     welcomeMessage.style.display = 'none'; // 隐藏欢迎消息
+                    welcomeActions.style.display = 'none'; // 隐藏欢迎操作
                 }
 
                 appendMessage('user', text);
-                vscode.postMessage({ command: 'askAI', text });
+                vscode.postMessage({ command: 'askAI', text, model, systemPrompt });
                 input.value = '';
-                showStatus('正在等待AI回复...'); // 显示状态
-
+                
+                appendMessage('ai', '<span style="color:gray;font-size:18px;font-weight:bold;">正在等待AI回复...</span>');
                 sendButton.disabled = true; // 禁用发送按钮
                 sendButton.style.cursor = 'not-allowed'; // 更改鼠标样式
                 sendButton.style.opacity = '0.5'; // 更改按钮透明度
@@ -442,7 +650,11 @@
 
             // 将消息容器添加到消息列表
             messagesDiv.appendChild(messageDiv);
-            
+            if (sender === 'ai' && text.includes('正在等待AI回复')) {
+                contentDiv.innerHTML = text;
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                return;
+            }
             // 如果是AI消息且需要逐字显示
             if (sender === 'ai') {
                 let index = 0;
@@ -562,14 +774,6 @@ function processCodeBlocks(container) {
     });
 }
        
-        function showStatus(text) {
-        statusDiv.textContent = text;
-        statusDiv.style.display = 'block';
-    }
-
-    function hideStatus() {
-        statusDiv.style.display = 'none';
-    }
 
     function typeWelcomeMessage(text, containerId) {
         const container = document.getElementById(containerId);
@@ -587,26 +791,44 @@ function processCodeBlocks(container) {
         type();
     }
     
-    </script>
-  <button id="scroll-bottom-btn" title="滚动到底部" style="
-    position: fixed;
-    right: 24px;
-    bottom: 32px;
-    z-index: 99;
-    background: #444;
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 22px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    cursor: pointer;
-">
-    <i class="fas fa-arrow-down"></i>
-</button>  
+
+// 渲染上下文文件列表
+function renderContextFiles() {
+    const listDiv = document.getElementById('context-files-list');
+    listDiv.innerHTML = '';
+    contextFiles.forEach((file, idx) => {
+        const fileDiv = document.createElement('div');
+        fileDiv.style.display = 'flex';
+        fileDiv.style.alignItems = 'center';
+        fileDiv.style.background = '#222';
+        fileDiv.style.color = '#fff';
+        fileDiv.style.borderRadius = '4px';
+        fileDiv.style.padding = '2px 8px';
+        fileDiv.style.fontSize = '12px';
+        fileDiv.style.marginRight = '4px';
+
+        fileDiv.innerHTML = `<i class="fas fa-file-alt" style="margin-right:4px;"></i>${file.fileName}`;
+
+        // 删除按钮
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '<i class="fas fa-times"></i>';
+        delBtn.style.background = 'transparent';
+        delBtn.style.border = 'none';
+        delBtn.style.color = '#fff';
+        delBtn.style.cursor = 'pointer';
+        delBtn.style.marginLeft = '4px';
+        delBtn.onclick = () => {
+            
+            // 通知后端同步删除
+            vscode.postMessage({ command: 'removeContextFile', filePath: file.filePath });
+        };
+        fileDiv.appendChild(delBtn);
+        listDiv.appendChild(fileDiv);
+    });
+}
+
+
+</script>
+
 </body>
 </html>
