@@ -21,24 +21,24 @@
   ],
   "main": "./extension.js",
   "contributes": {
-     "viewsContainers": {
-        "secondarySideBar": [
-          {
-            "id": "navicode",
-            "title": "NaviCode",
-            "icon": "media/robot-img.svg"
-          }
-        ]
-      },
-      "views": {
-        "navicode": [
-          {
-            "type": "webview",
-            "id": "navicodeChatView",
-            "name": "NaviCode Chat"
-          }
-        ]
-      },
+    "viewsContainers": {
+      "secondarySideBar": [
+        {
+          "id": "navicode",
+          "title": "NaviCode",
+          "icon": "media/robot-img.svg"
+        }
+      ]
+    },
+    "views": {
+      "navicode": [
+        {
+          "type": "webview",
+          "id": "navicodeChatView",
+          "name": "NaviCode Chat"
+        }
+      ]
+    },
     "configuration": {
       "title": "NaviCode",
       "properties": {
@@ -216,10 +216,6 @@
       {
         "command": "navicode.toggleRag",
         "title": "NaviCode: 切换Rag查询"
-      },
-      {
-        "command": "navicode.updateRagDb",
-        "title": "NaviCode: 创建/更新RAG数据库"
       }
     ],
     "keybindings": [
@@ -277,7 +273,11 @@
     "hnswlib-node": "^3.0.0",
     "openai": "^4.90.0",
     "recast": "^0.23.11",
-    "tree-sitter": "^0.21.1",
-    "tree-sitter-cpp": "^0.23.4"
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-c": "^0.24.1",
+    "tree-sitter-cpp": "^0.23.4",
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-python": "^0.23.6"
   }
 }

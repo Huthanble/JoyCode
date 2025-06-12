@@ -9,6 +9,23 @@ const glob = require("glob");
 const { HNSWLib } = require("@langchain/community/vectorstores/hnswlib");
 const { OpenAIEmbeddings } = require("@langchain/openai"); // 用于检索时自动embedding
 const { getEmbedding } = require('./embedding-local');
+const Parser = require('tree-sitter');
+
+// 导入各种语言的语法解析器
+const LANG_MAP = {
+  '.js': require('tree-sitter-javascript'),
+  '.ts': require('tree-sitter-javascript'),
+  '.tsx': require('tree-sitter-javascript'),
+  '.jsx': require('tree-sitter-javascript'),
+  '.py': require('tree-sitter-python'),
+  '.java': require('tree-sitter-java'),
+  '.c': require('tree-sitter-c'),
+  '.h': require('tree-sitter-c'),
+  '.cpp': require('tree-sitter-cpp'),
+  '.cc': require('tree-sitter-cpp'),
+  '.hpp': require('tree-sitter-cpp'),
+  // 可根据需要添加其他语言
+};
 
 // 包装一个兼容 langchain 的 embedding 对象
 class LocalEmbeddings {
@@ -88,7 +105,7 @@ async function getSuggestion(document, position) {
     if (workspaceFolders) {
       const rootDir = workspaceFolders[0].uri.fsPath;
       // 你可以根据实际情况调整 topN
-      ragContext = await getRagContext(prompt, 3, rootDir);
+      ragContext = await getRagContext(prompt, 5, rootDir, document);
 
       console.log("rag:",ragContext);
     }
@@ -229,15 +246,209 @@ async function getSuggestion(document, position) {
  * @param {string} queryText - 查询文本
  * @param {number} topN - 返回前N个片段
  * @param {string} rootDir - 仓库根目录
+ * @param {vscode.TextDocument} document - 当前文档
  * @returns {Promise<string>} - 拼接好的上下文字符串
  */
-async function getRagContext(queryText, topN, rootDir) {
+async function getRagContext(queryText, topN, rootDir, document) {
+  // 在查询时构建仓库
+  await buildRagRepositoryOnDemand(rootDir, document);
+  
   const results = await queryRagSnippetsHNSW(queryText, topN, rootDir);
   return results
     .map(
       (snip) => `文件: ${snip.file} 行: ${snip.start}-${snip.end}\n${snip.text}`
     )
     .join("\n---\n");
+}
+
+/**
+ * 根据当前文件的头文件依赖关系构建RAG仓库
+ * @param {string} rootDir - 仓库根目录
+ * @param {vscode.TextDocument} document - 当前文档
+ * @returns {Promise<void>}
+ */
+async function buildRagRepositoryOnDemand(rootDir, document) {
+  const tempFilePath = path.join(rootDir, ".navicode_temp");
+  const currentFilePath = document.fileName;
+  const dbPath = path.join(rootDir, ".navicode_hnsw");
+  
+  try {
+    // 检查是否需要重建仓库
+    let needRebuild = true;
+    
+    if (fs.existsSync(tempFilePath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(tempFilePath, 'utf8'));
+        if (data.lastFile === currentFilePath) {
+          needRebuild = false;
+        } else {
+          console.log(`文件已切换: ${data.lastFile} -> ${currentFilePath}，重建仓库`);
+        }
+      } catch (e) {
+        console.error("读取临时文件失败:", e);
+      }
+    }
+    
+    if (!needRebuild) {
+      return;
+    }
+    
+    // 彻底清除旧的向量数据库
+    hnswStore = null;
+    if (fs.existsSync(dbPath)) {
+      try {
+        // 强制删除旧的数据库文件
+        fs.rmSync(dbPath, { recursive: true, force: true });
+        console.log("已删除旧的向量数据库");
+      } catch (err) {
+        console.error("删除旧数据库失败:", err);
+      }
+    }
+    
+    // 查找当前文件的头文件依赖
+    const relatedFiles = await findHeaderDependencies(document, rootDir);
+    
+    // 创建新的空仓库实例
+    const store = new HNSWLib(
+      new LocalEmbeddings(),
+      { space: "cosine" }
+    );
+    
+    if (relatedFiles.length > 0) {
+      // 只处理相关文件，不包含当前文件
+      const chunks = [];
+      
+      // 添加相关文件
+      for (const file of relatedFiles) {
+        if (file === currentFilePath) continue; // 确保跳过当前文件
+        
+        try {
+          const content = fs.readFileSync(file, "utf8");
+          const fileChunks = splitByTreeSitter(content, file);
+          
+          fileChunks.forEach(chunk => {
+            chunks.push({
+              id: `${path.relative(rootDir, file)}_${chunk.start}_${chunk.end}`,
+              file: path.relative(rootDir, file),
+              start: chunk.start,
+              end: chunk.end,
+              text: chunk.text,
+            });
+          });
+        } catch (error) {
+          console.error(`读取相关文件失败: ${file}`, error);
+        }
+      }
+      
+      // 如果有块，添加到新仓库
+      if (chunks.length > 0) {
+        const docs = chunks.map(chunk => ({
+          pageContent: chunk.text,
+          metadata: {
+            file: chunk.file,
+            start: chunk.start,
+            end: chunk.end,
+            id: chunk.id,
+          },
+        }));
+        await store.addDocuments(docs);
+      }
+    }
+    
+    // 保存新仓库
+    await store.save(dbPath);
+    hnswStore = store;
+    
+    // 保存仓库状态
+    fs.writeFileSync(tempFilePath, JSON.stringify({
+      lastFile: currentFilePath,
+      timestamp: new Date().toISOString(),
+      fileCount: relatedFiles.length
+    }));
+    
+    console.log(`新仓库已构建，包含 ${relatedFiles.length} 个相关文件`);
+    
+  } catch (error) {
+    console.error("构建RAG仓库失败:", error);
+    // 构建失败时，创建一个空仓库
+    hnswStore = new HNSWLib(new LocalEmbeddings(), { space: "cosine" });
+    await hnswStore.save(dbPath);
+  }
+}
+
+
+
+/**
+ * 查找当前文件的头文件依赖
+ * @param {vscode.TextDocument} document - 当前文档
+ * @param {string} rootDir - 仓库根目录
+ * @returns {Promise<string[]>} - 相关文件路径列表
+ */
+async function findHeaderDependencies(document, rootDir) {
+  const filePath = document.fileName;
+  const content = document.getText();
+  const language = document.languageId;
+  
+  // 收集所有相关文件
+  const relatedFiles = new Set();
+  const visited = new Set();
+  
+  // 递归查找依赖
+  await findDependenciesRecursive(filePath, language, rootDir, relatedFiles, visited);
+  
+  // 转换为数组，并过滤掉当前文件
+  return Array.from(relatedFiles).filter(file => file !== filePath);
+}
+
+/**
+ * 递归查找文件依赖
+ * @param {string} filePath - 文件路径
+ * @param {string} language - 语言类型
+ * @param {string} rootDir - 仓库根目录
+ * @param {Set<string>} relatedFiles - 收集的相关文件
+ * @param {Set<string>} visited - 已访问的文件
+ * @returns {Promise<void>}
+ */
+async function findDependenciesRecursive(filePath, language, rootDir, relatedFiles, visited) {
+  if (visited.has(filePath)) return;
+  visited.add(filePath);
+  
+  try {
+    // 读取文件内容
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    // 提取导入路径
+    const importPaths = extractImportPaths(content, language, filePath);
+    
+    // 查找文件
+    for (const importPath of importPaths) {
+      const files = await findFilesInProject(importPath);
+      
+      for (const file of files) {
+        if (!visited.has(file)) {
+          relatedFiles.add(file);
+          
+          // 递归查找依赖，但限制深度
+          if (visited.size < 20) { // 限制递归深度
+            // 确定文件语言类型
+            const fileExt = path.extname(file).toLowerCase();
+            let fileLanguage = language;
+            
+            // 根据扩展名调整语言
+            if (fileExt === '.py') fileLanguage = 'python';
+            else if (fileExt === '.java') fileLanguage = 'java';
+            else if (['.c', '.h'].includes(fileExt)) fileLanguage = 'c';
+            else if (['.cpp', '.hpp', '.cc'].includes(fileExt)) fileLanguage = 'cpp';
+            else if (['.js', '.ts'].includes(fileExt)) fileLanguage = 'javascript';
+            
+            await findDependenciesRecursive(file, fileLanguage, rootDir, relatedFiles, visited);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`查找依赖失败: ${filePath}`, error);
+  }
 }
 
 /**
@@ -282,27 +493,153 @@ function splitByLines(content, chunkSize = 50) {
 }
 
 /**
- * 扫描仓库所有代码文件并拆分
- * @param {string} rootDir
- * @returns {Promise<Array<{id, file, start, end, text}>>}
+ * 根据文件扩展名获取对应的语言解析器
+ * @param {string} filePath 
+ * @returns {any} 语言解析器或null
  */
-async function scanAndSplitRepo(rootDir) {
-  const files = await getAllCodeFiles(rootDir);
-  let results = [];
-  for (const file of files) {
-    const content = fs.readFileSync(file, "utf8");
-    const chunks = splitByLines(content, 50);
-    chunks.forEach((chunk, idx) => {
-      results.push({
-        id: `${path.relative(rootDir, file)}_${chunk.start}_${chunk.end}`,
-        file: path.relative(rootDir, file),
-        start: chunk.start,
-        end: chunk.end,
-        text: chunk.text,
-      });
+function getLanguageParser(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return LANG_MAP[ext] || null;
+}
+
+/**
+ * 使用tree-sitter按函数/类/方法拆分代码
+ * @param {string} content 文件内容
+ * @param {string} filePath 文件路径
+ * @returns {Array<{start, end, text}>}
+ */
+function splitByTreeSitter(content, filePath) {
+  const Language = getLanguageParser(filePath);
+  if (!Language) {
+    // 不支持的文件类型，回退到按行分块
+    return splitByLines(content, 50);
+  }
+
+  try {
+    const parser = new Parser();
+    parser.setLanguage(Language);
+    const tree = parser.parse(content);
+    const chunks = [];
+    
+    // 收集代码中的函数/类/方法定义
+    collectStructureNodes(tree.rootNode, content, chunks);
+    
+    // 如果没有找到任何结构，回退到按行分块
+    if (chunks.length === 0) {
+      return splitByLines(content, 50);
+    }
+    
+    // 填补结构之间的空隙代码（如全局变量、导入语句等）
+    const filledChunks = fillGaps(chunks, content);
+    return filledChunks;
+  } catch (error) {
+    console.error(`Error parsing ${filePath}:`, error);
+    // 解析出错，回退到按行分块
+    return splitByLines(content, 50);
+  }
+}
+
+/**
+ * 收集代码结构节点（函数/类/方法等）
+ * @param {any} node tree-sitter节点
+ * @param {string} content 文件内容
+ * @param {Array} chunks 收集的代码块
+ */
+function collectStructureNodes(node, content, chunks) {
+  // 不同语言的结构节点类型
+  const structureTypes = [
+    'function_definition', 'function_declaration', 'method_definition',
+    'class_declaration', 'class_definition',
+    'function', 'method', 'class',
+    'arrow_function', 'constructor_definition'
+  ];
+  
+  if (structureTypes.includes(node.type)) {
+    // 计算行号（从1开始）
+    const startLine = node.startPosition.row + 1;
+    const endLine = node.endPosition.row + 1;
+    
+    chunks.push({
+      type: node.type,
+      start: startLine,
+      end: endLine,
+      text: content.substring(node.startIndex, node.endIndex)
     });
   }
-  return results;
+  
+  // 递归遍历子节点
+  for (const child of node.children) {
+    collectStructureNodes(child, content, chunks);
+  }
+}
+
+/**
+ * 填补代码结构之间的空隙
+ * @param {Array} chunks 代码结构块
+ * @param {string} content 完整文件内容
+ * @returns {Array} 完整的代码块
+ */
+function fillGaps(chunks, content) {
+  // 按开始行排序
+  chunks.sort((a, b) => a.start - b.start);
+  
+  const lines = content.split('\n');
+  const result = [];
+  let currentLine = 1;
+  
+  for (const chunk of chunks) {
+    // 处理结构前的代码
+    if (chunk.start > currentLine) {
+      const gapText = lines.slice(currentLine - 1, chunk.start - 1).join('\n');
+      if (gapText.trim()) {
+        result.push({
+          type: 'gap',
+          start: currentLine,
+          end: chunk.start - 1,
+          text: gapText
+        });
+      }
+    }
+    
+    // 添加结构块
+    result.push(chunk);
+    currentLine = chunk.end + 1;
+  }
+  
+  // 处理最后一个结构后的代码
+  if (currentLine <= lines.length) {
+    const gapText = lines.slice(currentLine - 1).join('\n');
+    if (gapText.trim()) {
+      result.push({
+        type: 'gap',
+        start: currentLine,
+        end: lines.length,
+        text: gapText
+      });
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * 按行拆分（回退方案）
+ * @param {string} content 
+ * @param {number} chunkSize 
+ * @returns {Array<{start, end, text}>}
+ */
+function splitByLines(content, chunkSize = 50) {
+  const lines = content.split("\n");
+  const chunks = [];
+  for (let i = 0; i < lines.length; i += chunkSize) {
+    const chunk = lines.slice(i, i + chunkSize).join("\n");
+    chunks.push({
+      start: i + 1,
+      end: Math.min(i + chunkSize, lines.length),
+      text: chunk,
+    });
+  }
+  return chunks;
 }
 
 let hnswStore = null;
@@ -982,40 +1319,6 @@ function activateCodeCompletion(context) {
         console.log("用户自定义提示词：", newPrompt);
         vscode.window.showInformationMessage("代码补全提示词已更新");
       }
-    })
-  );
-
-  // 注册创建/更新RAG数据库命令
-  context.subscriptions.push(
-    vscode.commands.registerCommand("navicode.updateRagDb", async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showWarningMessage("未打开工作区，无法构建RAG数据库");
-        return;
-      }
-      const rootDir = workspaceFolders[0].uri.fsPath;
-      vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "正在构建RAG数据库...",
-          cancellable: false,
-        },
-        async (progress) => {
-          try {
-            progress.report({ message: "扫描文件..." });
-            const chunks = await scanAndSplitRepo(rootDir);
-            progress.report({
-              message: `生成向量（共${chunks.length}片段）...`,
-            });
-            // 这里如果你已经有 embedChunks 可以用，也可以直接在 insertChunksToHNSW 里自动生成embedding
-            // 推荐直接插入文本（让 HNSWLib 自动生成embedding），更快更省API配额
-            await insertChunksToHNSW(chunks, rootDir);
-            vscode.window.showInformationMessage("RAG数据库已更新");
-          } catch (err) {
-            vscode.window.showErrorMessage("RAG数据库构建失败: " + err.message);
-          }
-        }
-      );
     })
   );
 
