@@ -12,7 +12,7 @@ function activate(context) {
       const config = vscode.workspace.getConfiguration('navicode');
       const currentModel = config.get('selectedModel', 'deepseek-chat');
       const selectedModel = await vscode.window.showQuickPick(
-        ['deepseek-chat', 'gpt-4', 'gpt-3.5'],
+        ['deepseek-chat', 'gpt-4', 'gpt-3.5', 'doubao'],
         { placeHolder: `当前模型: ${currentModel}` }
       );
 
