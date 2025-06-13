@@ -2,41 +2,112 @@ const { getOpenAIInstance, getSelectedModel } = require('./openaiClient');
 const vscode = require('vscode');
 
 let tempAreaContent = '';
-let tempAreaPanel = null; // 保存 WebviewPanel 实例
+let tempAreaPanel = null;
 
 function addToTempArea(selectedText) {
   tempAreaContent += selectedText + '\n';
-  // 如果面板已打开，则刷新内容
   if (tempAreaPanel) {
     tempAreaPanel.webview.html = getTempAreaHtml(tempAreaContent);
+    registerMessageListener(tempAreaPanel); // 注册通信
   }
 }
 
-function showTempAreaPanel(context) {
+function showTempAreaPanel() {
   if (tempAreaPanel) {
     tempAreaPanel.reveal(vscode.ViewColumn.Beside);
     tempAreaPanel.webview.html = getTempAreaHtml(tempAreaContent);
+    registerMessageListener(tempAreaPanel);
     return;
   }
   tempAreaPanel = vscode.window.createWebviewPanel(
     'tempAreaPanel',
     '临时可视化区域',
     vscode.ViewColumn.Beside,
-    { enableScripts: true }
+    {
+      enableScripts: true,
+    }
   );
   tempAreaPanel.webview.html = getTempAreaHtml(tempAreaContent);
+  registerMessageListener(tempAreaPanel);
   tempAreaPanel.onDidDispose(() => {
     tempAreaPanel = null;
   });
 }
 
+function registerMessageListener(panel) {
+  panel.webview.onDidReceiveMessage((message) => {
+    if (message.type === 'saveContent') {
+      tempAreaContent = message.text || '';
+      vscode.window.showInformationMessage('临时区域内容已保存 ✅');
+    }
+  });
+}
+
 function getTempAreaHtml(content) {
   return `
-    <html>
-      <body>
-        <h3>临时区域内容（可复制）</h3>
-        <textarea style="width:100%;height:300px;">${content}</textarea>
-      </body>
+    <!DOCTYPE html>
+    <html lang="zh">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          background-color: #f4f4f4;
+          padding: 20px;
+          color: #333;
+        }
+        h3 {
+          color: #0066cc;
+          margin-bottom: 10px;
+        }
+        textarea {
+          width: 100%;
+          height: 300px;
+          padding: 12px;
+          font-size: 14px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+          background-color: #fff;
+          resize: vertical;
+          white-space: pre;
+          font-family: 'Courier New', monospace;
+          line-height: 1.5;
+          box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        button {
+          margin-top: 10px;
+          padding: 6px 12px;
+          font-size: 14px;
+          background-color: #0066cc;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        button:hover {
+          background-color: #004b99;
+        }
+        .footer {
+          margin-top: 12px;
+          font-size: 12px;
+          color: #888;
+        }
+      </style>
+    </head>
+    <body>
+      <h3>🧠 临时可视化区域</h3>
+      <textarea id="codeArea">${content}</textarea><br/>
+      <button onclick="saveContent()">💾 保存内容</button>
+      <div class="footer">你可以在这里编辑上下文，然后点击“保存内容”来更新临时区域。</div>
+
+      <script>
+        const vscode = acquireVsCodeApi();
+        function saveContent() {
+          const updatedText = document.getElementById('codeArea').value;
+          vscode.postMessage({ type: 'saveContent', text: updatedText });
+        }
+      </script>
+    </body>
     </html>
   `;
 }
@@ -50,12 +121,11 @@ function activateTempArea(context) {
         if (selectedText.trim()) {
           addToTempArea(selectedText);
           vscode.window.showInformationMessage('已加入临时区域');
-          // 不再自动打开面板
         }
       }
     }),
     vscode.commands.registerCommand('extension.showTempArea', () => {
-      showTempAreaPanel(context);
+      showTempAreaPanel();
     }),
     vscode.commands.registerCommand('extension.codeFromTempArea', async () => {
       const editor = vscode.window.activeTextEditor;
@@ -70,18 +140,20 @@ function activateTempArea(context) {
         const model = getSelectedModel();
         try {
           const response = await openai.completions.create({
-              model: model,
-              prompt: prompt,
-              max_tokens: 1500
+            model: model,
+            prompt: prompt,
+            max_tokens: 1500
           });
           const generatedCode = response.choices[0]?.text.trim();
           if (generatedCode) {
-            tempAreaContent = ''; // 清空临时区域
+            tempAreaContent = ''; // 清空内容
             if (tempAreaPanel) {
               tempAreaPanel.webview.html = getTempAreaHtml(generatedCode);
+              registerMessageListener(tempAreaPanel);
             } else {
-              showTempAreaPanel(context);
+              showTempAreaPanel();
               tempAreaPanel.webview.html = getTempAreaHtml(generatedCode);
+              registerMessageListener(tempAreaPanel);
             }
             vscode.window.showInformationMessage('代码已生成，请在可视化区域复制');
           }
@@ -95,4 +167,6 @@ function activateTempArea(context) {
 
 module.exports = {
   activateTempArea,
+  addToTempArea,
+  showTempAreaPanel
 };

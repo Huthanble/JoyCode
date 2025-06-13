@@ -85,7 +85,8 @@
           "enum": [
             "deepseek-chat",
             "gpt-4",
-            "gpt-3.5"
+            "gpt-3.5",
+            "doubao"
           ]
         },
         "navicode.templates": {
