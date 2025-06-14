@@ -1,17 +1,12 @@
 #include <iostream>
+int addThreeNumbers(int a, int b, int c) {
+    int sum = a + b + c;  
+    return sum;
+}
 
 int main() {
-    int num1, num2, sum;
-
-    std::cout << "请输入第一个整数: ";
-    std::cin >> num1;
-
-    std::cout << "请输入第二个整数: ";
-    std::cin >> num2;
-
-    sum = num1 + num2;
-
-    std::cout << "两个整数的和是: " << sum << std::endl;
-
-    return 0;
+  auto result = addThreeNumbers(1, 1, 1);
+  std::cout << "Test result: " << result << std::endl;
+  return 0;
 }
+    
