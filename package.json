@@ -16,29 +16,28 @@
     "onLanguage:python",
     "onLanguage:java",
     "onLanguage:c",
-    "onLanguage:cpp",
-    "onView:navicodeChatView"
+    "onLanguage:cpp"
   ],
   "main": "./extension.js",
   "contributes": {
-     "viewsContainers": {
-        "secondarySideBar": [
-          {
-            "id": "navicode",
-            "title": "NaviCode",
-            "icon": "media/robot-img.svg"
-          }
-        ]
-      },
-      "views": {
-        "navicode": [
-          {
-            "type": "webview",
-            "id": "navicodeChatView",
-            "name": "NaviCode Chat"
-          }
-        ]
-      },
+    "viewsContainers": {
+      "secondarySideBar": [
+        {
+          "id": "navicode",
+          "title": "NaviCode",
+          "icon": "media/robot-img.svg"
+        }
+      ]
+    },
+    "views": {
+      "navicode": [
+        {
+          "type": "webview",
+          "id": "navicodeChatView",
+          "name": "NaviCode Chat"
+        }
+      ]
+    },
     "configuration": {
       "title": "NaviCode",
       "properties": {

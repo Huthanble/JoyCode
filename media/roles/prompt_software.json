@@ -1,0 +1,48 @@
+{
+  "goal": "开发一个 {例如：类似小宇宙的播客 App}，需要输出高保真的原型图。",
+  "prompt": "我想开发一个 {App 类型，例如：类似小宇宙的播客 App，专注于独立播客和深度内容发现}。请通过以下方式帮我完成所有核心界面的高保真原型设计，并确保这些原型界面可以直接用于后续开发：",
+  "referenceUi": "（可选）参考 UI 截图： 如果我提供了 UI 截图，请严格按照截图的布局、颜色、字体、间距等所有视觉细节进行设计。未提供截图时，请遵循下述设计原则。",
+  "uxAnalyst": {
+    "mainFunctions": "分析此 App 的主要功能：{列出核心功能，例如：播客发现、订阅、播放控制、个性化推荐、离线下载、评论互动}。",
+    "targetUsers": "分析目标用户群体：{描述目标用户，例如：对特定领域有深度兴趣、喜欢利用碎片时间学习、追求高质量音频内容的年轻白领和学生}。",
+    "userJourney": "确定核心用户旅程和交互逻辑：{例如：用户如何发现新播客？如何管理订阅？播放体验如何优化？}"
+  },
+  "productManager": {
+    "keyScreens": "定义关键界面/屏幕：{例如：首页（推荐/发现）、订阅列表页、播放器详情页、搜索页、用户个人中心页、设置页、播客详情页、单集列表页}。",
+    "informationArchitecture": "规划信息架构：确保各界面之间的导航流畅、信息层级清晰合理，用户能轻松找到所需内容和功能。",
+    "navigationMode": "设计导航模式：{例如：底部 Tab Bar 导航（首页、订阅、发现、我的）}。"
+  },
+  "uiDesigner": {
+    "style": "设计风格：{例如：现代、简约、内容优先、沉浸式}。",
+    "platformGuidelines": "遵循平台设计规范：贴近最新的 iOS (Human Interface Guidelines) / Android (Material Design 3) 设计规范。",
+    "uiElements": "UI 元素：使用现代化、清晰易懂的 UI 元素（如卡片式设计、清晰的按钮、可读性强的字体、适当的留白）。",
+    "visualExperience": "视觉体验：确保色彩搭配和谐、对比度适宜、视觉层级分明，提供优秀的视觉引导和用户体验。",
+    "iconStyle": "图标风格：{例如：线性、面性、简约，与整体风格一致}。"
+  },
+  "frontendDeveloper": {
+    "techStack": "技术栈：使用 HTML + Tailwind CSS (首选) 或 Bootstrap 生成所有原型界面。",
+    "iconLibrary": "图标库：使用 FontAwesome 或其他类似的开源 UI 图标库（如 Lucide Icons, Heroicons）来增强界面的真实感和美观度。",
+    "codeStructure": {
+      "independentHtml": "独立 HTML 文件： 每个主要界面应作为独立的 HTML 文件存放（例如：home.html, subscriptions.html, player.html, profile.html, settings.html）。",
+      "mainEntry": "主入口 index.html：index.html 作为主展示页面，不直接包含所有界面的 HTML 代码。",
+      "iframeUsage": "使用 iframe 动态加载并平铺展示各个独立的 HTML 界面片段。目标是在一个页面内滚动查看所有核心界面，而不是通过链接跳转。",
+      "navigation": "提供一个简单的侧边栏或顶部导航，用于切换 iframe 中加载的界面（可选，如果平铺展示过长）。"
+    }
+  },
+  "realismEnhancement": {
+    "deviceFrame": "设备框架： 界面内容区域模拟 iPhone 15 Pro (393x852px 逻辑像素) 或 Android 旗舰机型的主流尺寸。整个“手机”预览应在 index.html 中居中显示，并具有圆角，模拟真实手机的外观。",
+    "statusBarAndNavBar": "状态栏与导航栏：在每个 iframe 加载的界面顶部添加模拟的 iOS 状态栏（时间、信号、Wi-Fi、电池）或 Android 状态栏。",
+    "bottomNav": "如果设计包含底部导航，确保在 index.html 的“手机”框架内，位于所有 iframe 内容之下，或者每个 iframe 内部都包含该底部导航栏（根据设计一致性选择）。"
+  },
+  "realUiAndContent": {
+    "images": "使用来自 Unsplash (风景、人物、抽象背景等)、Pexels 或 Apple/Google 官方 UI 资源中的高质量、相关的真实图片，避免使用纯色占位符。",
+    "sampleText": "填充有意义的示例文本（例如，真实的播客标题、描述、用户名、评论内容），而不是 \"Lorem Ipsum\"。",
+    "interactionHint": "交互提示： 对于关键按钮或可交互元素，可以使用 CSS hover 或 active 状态来模拟点击效果。"
+  },
+  "outputRequirements": [
+    "提供一个包含所有 HTML 文件和相关静态资源（CSS、JS、图片）的完整压缩包。",
+    "确保 index.html 可以直接在浏览器中打开并正确展示所有嵌入的界面。",
+    "HTML 代码应结构清晰、注释良好，方便开发人员理解和使用。"
+  ],
+  "note": "请按照以上要求生成完整的 HTML 原型代码。如果过程中有任何不明确之处或需要进一步的决策，请提出并给出建议选项。"
+}

@@ -1,0 +1,52 @@
+{
+  "scene": "{企业官网开发}",
+  "goal": "开发一个 {例如：中型科技公司的企业官网}。",
+  "prompt": "我需要为一家 {中型科技公司，主营业务为AI解决方案} 建立一个新的企业官网。请作为一名全栈Web开发顾问和UX设计师，帮助我规划网站的整体架构、关键页面和技术选型。",
+  "siteObjectivesAndAudience": {
+    "mainObjectives": "主要目标：{例如：展示公司实力、介绍产品与服务、吸引潜在客户、发布行业洞察、招聘人才}。",
+    "targetAudience": "目标受众：{例如：潜在企业客户、合作伙伴、投资者、求职者、媒体记者}。"
+  },
+  "siteMapAndPages": {
+    "siteMap": "设计网站的整体信息架构（Site Map）。",
+    "examplePages": [
+      "首页 (Homepage)",
+      "关于我们 (About Us - 公司介绍、团队、发展历程、企业文化)",
+      "产品与服务 (Products/Services - 分类展示，每个产品/服务有详情页)",
+      "解决方案 (Solutions - 针对不同行业的解决方案案例)",
+      "客户案例 (Case Studies/Portfolio)",
+      "新闻与博客 (News/Blog - 公司新闻、行业动态、技术文章)",
+      "招贤纳士 (Careers - 招聘职位列表、公司福利)",
+      "联系我们 (Contact Us - 联系方式、表单、地图)"
+    ],
+    "pagePlanning": "规划每个核心页面的关键内容模块和大致布局。"
+  },
+  "designAndUX": {
+    "style": "整体风格：{例如：专业、现代、科技感、简洁大气、用户友好}。",
+    "responsive": "响应式设计：确保在桌面、平板、手机等不同设备上都有良好的浏览体验。",
+    "uxConsiderations": "关键UX考量：{例如：清晰的导航、突出的行动召唤按钮 (CTA)、快速的页面加载速度、高质量的图片和视觉内容、易于阅读的排版}。"
+  },
+  "techStack": {
+    "frontend": "前端： {例如：React (Next.js) / Vue (Nuxt.js) / Astro / 或静态站点生成器如 Hugo/Jekyll，配合 Tailwind CSS 或 Bootstrap}。理由是什么？",
+    "backendOrCMS": "后端/CMS（如果需要动态内容管理）： {例如：Strapi / Sanity.io / WordPress (Headless) / 或自建后端如 Node.js+Express / Python+Django}。理由是什么？",
+    "database": "数据库（如果适用）： {例如：PostgreSQL, MySQL, MongoDB}。",
+    "deployment": "部署方案： {例如：Vercel, Netlify, AWS, 阿里云}。"
+  },
+  "contentStrategy": {
+    "contentTypes": "针对核心页面，建议需要准备哪些类型的内容（文字、图片、视频）。",
+    "professionalism": "如何体现公司的专业性和独特性。"
+  },
+  "seo": {
+    "suggestions": [
+      "语义化HTML标签",
+      "关键词优化",
+      "高质量内容",
+      "内链建设",
+      "移动友好"
+    ]
+  },
+  "outputRequirements": [
+    "一份详细的规划文档，包括站点地图、核心页面内容概要、设计风格描述、技术选型建议及理由。",
+    "如果可能，为首页和产品详情页提供一个简单的线框图或布局草图。",
+    "请确保方案具有前瞻性，能够支持公司未来几年的发展需求。"
+  ]
+}

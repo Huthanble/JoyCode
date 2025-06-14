@@ -1,0 +1,32 @@
+{
+  "scene": "{在线点餐小程序购物车模块设计}",
+  "goal": "为 {例如：一个在线点餐小程序} 的 {例如：购物车模块} 进行页面设计和核心逻辑梳理。",
+  "prompt": "我计划开发一个 {在线点餐微信小程序}，现在需要为 {购物车模块} 进行详细设计。请扮演微信小程序开发专家角色，协助我完成以下任务：",
+  "featureAnalysis": {
+    "coreFeatures": "明确 {购物车模块} 的核心功能：{例如：添加商品到购物车、从购物车移除商品、修改商品数量、显示商品列表及总价、清空购物车、去结算}。",
+    "edgeCases": "考虑边缘情况：{例如：商品库存不足、商品下架、优惠券使用、配送费计算}。"
+  },
+  "uiDesign": {
+    "layout": "设计购物车页面的布局和元素，遵循微信小程序设计指南。",
+    "structure": "描述页面结构：{例如：顶部商家信息、商品列表区域（每个商品项包含图片、名称、规格、价格、数量调整器、删除按钮）、底部汇总区域（全选、合计金额、结算按钮）}。",
+    "components": "建议使用的微信小程序原生组件：{例如：view, text, image, button, checkbox, input (用于数量修改)}。",
+    "wxmlWxss": "提供关键部分的 WXML 结构草稿和 WXSS 样式建议（可以使用 Tailwind CSS 的类名风格进行描述，如果AI支持）。"
+  },
+  "interactionLogic": {
+    "userFlow": "梳理核心交互流程的用户操作路径。",
+    "functions": {
+      "addToCart": "addToCart(productInfo, quantity): 如何将商品信息和数量存入本地存储或全局状态。",
+      "removeFromCart": "removeFromCart(productId): 如何移除商品。",
+      "updateQuantity": "updateQuantity(productId, newQuantity): 如何更新商品数量并重新计算价格。",
+      "calculateTotal": "calculateTotal(): 如何计算购物车内商品总价。",
+      "goToCheckout": "goToCheckout(): 跳转到订单确认页的逻辑，需要传递哪些数据。"
+    }
+  },
+  "dataManagement": "建议购物车数据在小程序端的存储方式（例如：wx.setStorageSync, globalData, 或状态管理库如 mobx-miniprogram）。",
+  "apiInteraction": {
+    "apiList": "列出购物车模块需要与后端交互的 API 接口：{例如：同步购物车数据到服务器、获取商品最新价格和库存、提交订单前预校验}。",
+    "apiDetails": "简述每个接口的请求参数和预期响应。"
+  },
+  "uxOptimization": "提出至少3个提升购物车模块用户体验的建议：{例如：实时更新总价、空购物车友好提示、商品数量修改的便捷操作、加载状态提示}。",
+  "outputRequirements": "提供一份包含上述所有分析和设计的 Markdown 文档。如果可能，针对核心 WXML 结构和 JS 逻辑给出代码片段示例。请确保设计方案符合微信小程序的开发规范，并注重用户体验和性能。"
+}

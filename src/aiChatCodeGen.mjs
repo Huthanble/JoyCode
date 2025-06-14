@@ -1,8 +1,13 @@
-const vscode = require('vscode');
-const fs = require('fs');
-const path = require('path');
-const { getOpenAIInstance, getSelectedModel } = require('./openaiClient');
-const openai = getOpenAIInstance();
+// @ts-nocheck
+import path from 'path';
+import * as vscode from 'vscode';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// 设置环境变量以指定模型缓存路径
+// process.env.TRANSFORMERS_CACHE = modelPath;
+import { getOpenAIInstance, getSelectedModel } from './openaiClient.js';
 class ChatViewProvider {
   constructor(context) {
     this.context = context;
@@ -15,15 +20,10 @@ class ChatViewProvider {
     this.contextFiles = [];
     this.chatHistory = [];
     this.lastActiveEditor = vscode.window.activeTextEditor;
-    
-    // 系统提示数据
-    this.systemPromptData = {
-      aiRole: '假设你是一名经验丰富的编程导师，能提供实用的建议和指导',
-      aiScenario: '帮助用户了解编程基础和核心概念。通过实际项目实践和提高编程技能。',
-      aiStyle: '通俗易懂、详细分步讲解。学习用户的代码风格，模仿用户的代码风格来编写代码',
-      aiOutput: 'Markdown代码块、用户用何种语言提问，就用何种语言回答'
-    };
-    
+    this.aiRole = 'general'; 
+    this.flaskEndpoint = '';
+    this.flaskToken = '';
+    this.openai = getOpenAIInstance();  
     this.loadSystemPrompt();
     this.loadChatHistory();
     
@@ -135,13 +135,7 @@ class ChatViewProvider {
     // 初始化编辑器信息
     this.updateActiveEditorInfo();
     
-    // 发送系统提示数据
     setTimeout(() => {
-      webviewView.webview.postMessage({
-        command: 'initSystemPrompt',
-        data: this.systemPromptData
-      });
-      
       // 发送聊天历史
       if (this.chatHistory.length > 0) {
         webviewView.webview.postMessage({
@@ -154,14 +148,6 @@ class ChatViewProvider {
     // 处理前端消息
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
-        case 'saveSystemPrompt':
-          try {
-            fs.writeFileSync(this.systemPromptPath, JSON.stringify(message.data, null, 2), 'utf-8');
-            this.systemPromptData = message.data;
-          } catch (e) {
-            vscode.window.showErrorMessage('保存System Prompt失败: ' + e.message);
-          }
-          break;
           
         case 'removeContextFile':
           this.contextFiles = this.contextFiles.filter(f => f.filePath !== message.filePath);
@@ -217,6 +203,9 @@ class ChatViewProvider {
         case 'askAI':
           await this.handleAiRequest(message, webviewView);
           break;
+        case 'importModel':
+          await this.checkImportModel(message, webviewView);
+          break;
           
         case 'regenerate':
           await this.handleRegenerateRequest(message, webviewView);
@@ -226,11 +215,34 @@ class ChatViewProvider {
           // 处理新建聊天窗口的逻辑
           this.chatHistory = [];
           this.saveChatHistory();
+          this.chatTitle = '';
           // 通知前端清空消息
           webviewView.webview.postMessage({
                 command: 'clearChat'
             });
           break;
+
+        case 'openSystemPromptJson':
+          const fileMap = {
+            general: 'prompt_general.json',
+            software: 'prompt_software.json',
+            backend: 'prompt_backend.json',
+            dbdesigner: 'prompt_dbdesigner.json',
+            miniapp: 'prompt_miniapp.json',
+            webdev: 'prompt_webdev.json'
+        };
+         
+        const fileName = fileMap[this.aiRole] || 'prompt_general.json';
+        const filePath = path.join(this.context.extensionPath, 'media', 'roles',fileName);
+        // 用 VS Code API 打开文件
+        vscode.workspace.openTextDocument(filePath).then(doc => {
+            vscode.window.showTextDocument(doc, { preview: false });
+        });
+        break;
+
+        case 'changeRole':
+          this.aiRole = message.role || 'general';
+        break;
       }
     });
   }
@@ -238,7 +250,29 @@ class ChatViewProvider {
   async handleAiRequest(message, webviewView) {
     const userInput = message.text;
     const model = message.model || 'deepseek-chat';
-    const systemPrompt = message.systemPrompt || '你是代码助手，请用简洁、专业的方式回答用户问题。';
+    // 根据当前 this.aiRole 读取对应的 JSON 文件内容
+    const fileMap = {
+        general: 'prompt_general.json',
+        software: 'prompt_software.json',
+        backend: 'prompt_backend.json',
+        dbdesigner: 'prompt_dbdesigner.json',
+        miniapp: 'prompt_miniapp.json',
+        webdev: 'prompt_webdev.json'
+    };
+    const fileName = fileMap[this.aiRole] || 'prompt_general.json';
+    const filePath = path.join(this.context.extensionPath, 'media', 'roles', fileName);
+
+    let systemPrompt = '';
+    try {
+        if (fs.existsSync(filePath)) {
+            // 直接用整个 JSON 内容作为 systemPrompt
+            systemPrompt = fs.readFileSync(filePath, 'utf-8');
+        } else {
+            systemPrompt = '';
+        }
+    } catch (e) {
+        systemPrompt = '';
+    }
     
     if (!userInput || userInput.trim() === '') {
       webviewView.webview.postMessage({ command: "response", text: "输入不能为空，请重新输入。" });
@@ -265,19 +299,21 @@ class ChatViewProvider {
     
     try {
         const isFirstQuestion = this.chatHistory.filter(m => m.role === 'user').length === 1 && !this.chatTitle;
+        let reply = '';
+        let chatTitle = '';
 
-      let reply = '';
-      let chatTitle = '';
-
+      if (model === 'doubao') {
+        
+    } else if (model === 'deepseek-chat') {
       if (isFirstQuestion) {
         // 让AI同时返回回答和标题
-        const response = await openai.chat.completions.create({
+        const response = await this.openai.chat.completions.create({
           model,
           messages: [
             {
               role: "system",
               content:
-                `${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n${systemPrompt}\n请先回答用户问题，然后用一句话总结本次对话主题，格式为：\n【标题】xxxx`
+                `这是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}\n请先回答用户问题，然后用一句话总结本次对话主题，格式为：\n【标题】xxxx`
             },
             ...this.chatHistory.map(msg => ({
               role: msg.role,
@@ -301,13 +337,13 @@ class ChatViewProvider {
         webviewView.webview.postMessage({ command: "setChatTitle", title: chatTitle });
       } else {
         // 普通回复
-        const response = await openai.chat.completions.create({
+        const response = await this.openai.chat.completions.create({
           model,
           messages: [
             {
               role: "system",
               content:
-                `${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n${systemPrompt}`
+                `这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n`
             },
             ...this.chatHistory.map(msg => ({
               role: msg.role,
@@ -317,7 +353,34 @@ class ChatViewProvider {
         });
         reply = response.choices[0]?.message?.content || "AI 无法生成回复。";
       }
+    }
+    else{
+          
+          // 准备请求数据
+          const userInput = message.text || '';
+          const requestBody = {
+              user_input: userInput,
+          };
 
+          // 发起请求到 Flask 服务
+          const response = await fetch(this.flaskEndpoint, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  ...(this.flaskToken ? { Authorization: this.flaskToken } : {}) // 如果有 Token，则添加到请求头
+              },
+              body: JSON.stringify(requestBody)
+          });
+
+          // 解析响应
+          if (!response.ok) {
+              throw new Error(`Flask 服务返回错误状态码: ${response.status}`);
+          }
+
+          const responseData = await response.json();
+          reply = responseData.response || 'Flask 服务未返回有效内容。';
+          
+    }
       this.chatHistory.push({
         role: 'assistant',
         content: String(reply)
@@ -334,6 +397,37 @@ class ChatViewProvider {
       webviewView.webview.postMessage({ command: "response", text: "对不起，AI 无法生成回复。" });
     }
   }
+
+
+  async checkImportModel(message, webviewView) {
+    const { endpoint, token } = message;
+
+    // 验证 Flask URL 是否存在
+    if (!endpoint || !endpoint.trim()) {
+        webviewView.webview.postMessage({
+            command: 'response',
+            text: 'Flask 服务的 URL 地址不能为空，请重新输入。'
+        });
+        return;
+    }
+
+    try {
+        // 验证 URL 格式
+        new URL(endpoint);
+    } catch {
+        vscode.window.showErrorMessage('请输入合法的 Flask 服务 URL 地址。');
+    }
+
+    // 保存 URL 和 Token
+    this.flaskEndpoint = endpoint;
+    this.flaskToken = token;
+
+    // 向前端确认保存成功
+    vscode.window.showInformationMessage('Flask 服务 URL 和 Token 已保存!');
+
+    console.log('Flask 服务 URL:', this.flaskEndpoint);
+    console.log('Flask 服务 Token:', this.flaskToken || '未提供');
+}
   
   async handleRegenerateRequest(message, webviewView) {
     const model = message.model || 'deepseek-chat';
@@ -386,4 +480,4 @@ class ChatViewProvider {
   }
 }
 
-module.exports = ChatViewProvider;
+export default ChatViewProvider;

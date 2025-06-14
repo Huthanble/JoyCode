@@ -1,12 +1,13 @@
+// @ts-nocheck
 const vscode = require('vscode');
 const { activateCodeCompletion } = require('./src/codeCompletion');
 const { activateCommentToCode } = require('./src/commentToCode');
 const {activateTempArea} = require('./src/TempArea');
 const { deactivateCodeCompletion } = require('./src/codeCompletion');
 const { deactivateCommentToCode } = require('./src/commentToCode');
-const ChatViewProvider = require('./src/aiChatCodeGen');
 
-function activate(context) {
+
+async function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('navicode.switchModel', async () => {
       const config = vscode.workspace.getConfiguration('navicode');
@@ -25,6 +26,7 @@ function activate(context) {
   activateTempArea(context);
   activateCodeCompletion(context);
   activateCommentToCode(context);
+  const { default: ChatViewProvider } = await import('./src/aiChatCodeGen.mjs');
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
         'navicodeChatView',
