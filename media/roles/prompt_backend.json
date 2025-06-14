@@ -1,0 +1,35 @@
+{
+  "scene": "设计一个{新的 RESTful API}",
+  "goal": "为 {例如：一个电商平台的订单管理模块} 设计后端 API。",
+  "prompt": "我正在为一个 {电商平台的订单管理模块} 构建后端服务。请作为一名经验丰富的后端架构师，帮我设计一套完整的 RESTful API。",
+  "coreResourceIdentification": "确定此模块的核心资源：{例如：订单 (Order)、订单项 (OrderItem)、用户 (User)、商品 (Product)}。",
+  "apiEndpoints": {
+    "standardCrud": "为每个资源设计标准的 CRUD 操作端点 (GET, POST, PUT, DELETE)。",
+    "otherEndpoints": "考虑其他必要的操作端点：{例如：取消订单、查询用户订单列表、获取订单详情、更新订单状态}。",
+    "urlStyle": "URL 结构应清晰、符合 RESTful 风格（例如：/api/v1/users/{userId}/orders, /api/v1/orders/{orderId}）。"
+  },
+  "dataModel": {
+    "definition": "为每个资源定义详细的数据模型（字段、数据类型、是否必需、示例值）。",
+    "example": "{例如，Order Schema: orderId (string, uuid), userId (string, uuid), items (array of OrderItem), totalAmount (number), status (string, enum: pending, paid, shipped, delivered, cancelled), createdAt (timestamp), updatedAt (timestamp)}。",
+    "relations": "考虑数据之间的关联关系。"
+  },
+  "requestAndResponse": {
+    "format": "请求体 (Request Body) 和响应体 (Response Body) 均使用 JSON 格式。",
+    "parameters": "明确每个端点的请求参数（路径参数、查询参数、请求体）。",
+    "responses": "明确每个端点的成功响应 (2xx) 和错误响应 (4xx, 5xx) 的结构和状态码。",
+    "paginationSortingFiltering": "包含分页 (pagination)、排序 (sorting)、过滤 (filtering) 的设计方案。"
+  },
+  "authenticationAndAuthorization": {
+    "authentication": "简述认证机制：{例如：JWT (JSON Web Tokens)}。",
+    "authorization": "说明关键端点的授权要求：{例如：用户只能访问自己的订单，管理员可以访问所有订单}。"
+  },
+  "apiDocumentation": {
+    "spec": "请以 OpenAPI 3.0 (Swagger) 规范的 YAML 或 JSON 格式输出 API 设计。",
+    "details": "包含每个端点的描述、参数说明、请求/响应示例。"
+  },
+  "techStackSuggestion": {
+    "backend": "如果方便，请推荐适合此 API 开发的后端技术栈：{例如：Node.js + Express/NestJS, Python + Django/Flask, Java + Spring Boot}。",
+    "database": "数据库选择建议：{例如：PostgreSQL, MongoDB}。"
+  },
+  "requirements": "请确保 API 设计具有良好的可扩展性、安全性和易用性。"
+}

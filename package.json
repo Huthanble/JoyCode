@@ -16,8 +16,7 @@
     "onLanguage:python",
     "onLanguage:java",
     "onLanguage:c",
-    "onLanguage:cpp",
-    "onView:navicodeChatView"
+    "onLanguage:cpp"
   ],
   "main": "./extension.js",
   "contributes": {

@@ -1,0 +1,20 @@
+{
+  "scene": "数据库表结构设计",
+  "goal": "为 {例如：一个社交媒体应用的用户动态功能} 设计数据库表结构。",
+  "prompt": "我正在开发一个 {社交媒体应用}，需要为其 {用户动态 (Feeds/Posts)} 功能设计数据库表结构。请作为一名资深数据库管理员 (DBA) 协助我完成。",
+  "coreEntities": "确定核心数据实体：{例如：用户 (User)、动态 (Post)、评论 (Comment)、点赞 (Like)、话题 (Topic/Hashtag)}。",
+  "tableDesign": {
+    "entityTables": "为每个实体设计一张或多张表。",
+    "fields": "明确每张表的字段（列名）、数据类型（例如：VARCHAR(255), INT, TEXT, TIMESTAMP, BOOLEAN, UUID）、约束（主键, 外键, 非空, 唯一, 默认值）。",
+    "example": "{例如，Posts 表：post_id (UUID, PK), user_id (UUID, FK references Users), content (TEXT, NOT NULL), image_url (VARCHAR(255)), created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP), updated_at (TIMESTAMP)}。"
+  },
+  "relations": {
+    "definition": "明确表与表之间的关系（一对一, 一对多, 多对多）。",
+    "junctionTables": "对于多对多关系，设计中间表（关联表）。{例如：Post_Topics 表用于关联 Posts 和 Topics}。"
+  },
+  "indexStrategy": "为经常用于查询条件的字段建议创建索引，以优化查询性能。{例如：在 Posts 表的 user_id 和 created_at 字段上创建索引}",
+  "consistencyAndIntegrity": "考虑如何通过数据库约束（如外键）保证数据的一致性和完整性。",
+  "outputFormat": "请以 SQL DDL (Data Definition Language) 语句（例如，适用于 PostgreSQL 或 MySQL）的形式提供表结构设计。或者，以清晰的 Markdown 表格形式展示每个表的设计。",
+  "normalization": "简要说明设计遵循的数据库范式（例如，第三范式 3NF），或在何处为了性能考虑可能进行了反范式设计。",
+  "requirements": "请确保数据库设计能够高效地支持 {用户动态的发布、浏览、搜索、互动} 等核心操作，并具备良好的扩展性。"
+}
