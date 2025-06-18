@@ -246,20 +246,21 @@
             background: rgba(100,100,100,0.08);
         }
         #model-select {
+            text-align: center;
             appearance: none;           /* 去除原生样式 */
             -webkit-appearance: none;
             -moz-appearance: none;
             background: transparent;
             border:none !important;
             color: #353434;
-            padding: 4px 38px 4px 8px;  /* 右侧留空间放箭头 */
+            padding: 4px 45px 4px 8px;  /* 右侧留空间放箭头 */
             font-size: 14px;
             cursor: pointer;
             outline: none;
             min-width: 130px;
             background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='16' viewBox='0 0 20 20' width='16' xmlns='http://www.w3.org/2000/svg'><path d='M5.516 7.548a.75.75 0 0 1 1.06 0L10 10.97l3.424-3.423a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06z'/></svg>");
             background-repeat: no-repeat;
-            background-position: right 8px center;
+            background-position: right 3px center;
             background-size: 18px 18px;
             position: absolute;
             right: 80px;
@@ -350,6 +351,21 @@
                 margin-right: 7px;
                 transition: background 0.2s;
         }
+        #find-history-btn {
+                background: transparent;
+                border: none;
+                color: #aaa;
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                margin-right: 7px;
+                transition: background 0.2s;
+        }
         
     </style>
 </head>
@@ -371,6 +387,9 @@
         <div id="chat-title" style="flex:1; text-align:center; font-weight:bold; font-size:18px;"></div>
         <button id="new-chat-btn" title="新建聊天窗口">
             <i class="fas fa-plus"></i>
+        </button>
+        <button id="find-history-btn" title="历史会话">
+            <i class="fas fa-history"></i>
         </button>
         </div>
         
@@ -495,6 +514,16 @@
                 role: aiRole
             });
         });
+        document.getElementById('model-select').addEventListener('change', function() {
+            let selectedModel = this.value;
+            currentModel = selectedModel; // 同步更新 currentModel
+            // 发送消息给后端，通知模型变化
+            vscode.postMessage({
+                command: 'changeModel',
+                model: selectedModel
+            });
+        });
+
         document.getElementById('edit-system-btn').addEventListener('click', function() {
             const selectedRole = document.getElementById('role-select').value;
             vscode.postMessage({
@@ -502,6 +531,13 @@
                 role: selectedRole
             });
         });
+
+        document.getElementById('find-history-btn')?.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'invokeCommand',
+                name: 'chatCodeGen.selectHistorySession'
+            });
+            });
         
         document.getElementById('new-chat-btn').onclick = function() {
             vscode.postMessage({ command: 'newChatWindow' });
@@ -601,7 +637,7 @@
         setModel(event.target.value);
     });
 
-        window.addEventListener('message', (event) => {
+        window.addEventListener('message', async (event) => {
             const message = event.data;
             if (message.command === 'setChatTitle') {
                 const titleDiv = document.getElementById('chat-title');
@@ -621,6 +657,11 @@
                 document.getElementById('welcome-message').style.display = '';
                 document.getElementById('welcome-actions').style.display = '';
                 document.getElementById('chat-title').style.display = 'none';
+            }
+            if (message.command === 'loadHistorySession') {
+                console.log('正在处理 loadHistorySession');      
+                renderChatHistory(message.history);
+                updateTitle(message.title);
             }
             if (message.command === 'fileInfo') {
                 // 选择图标
@@ -795,8 +836,8 @@
                                 // 显示等待提示
                                 aiMessageDiv.querySelector('.message-content').innerHTML = '<span style="color:gray;font-size:18px;font-weight:bold;">正在等待AI回复...</span>';
                             }
-                            const model = document.getElementById('model-select').value;
-                            vscode.postMessage({ command: 'regenerate', model });
+    
+                                vscode.postMessage({ command: 'regenerate', model: currentModel });          
                         };
                         contentDiv.appendChild(regenBtn);
                         }
@@ -819,8 +860,38 @@
             }
         }
 
+        function appendHistory(sender, content, isMarkdown = false,messageIndex=null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+
+            // 添加头像
+            const avatar = document.createElement('img');
+            avatar.src = sender === 'user' ? userAvatarUri : aiAvatarUri;
+            avatar.alt = sender === 'user' ? '用户头像' : 'AI头像';
+            avatar.className = 'avatar';
+
+            // 添加消息内容容器
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+
+            // 设置消息内容（统一逻辑）
+            if (isMarkdown) {
+                contentDiv.innerHTML = marked.parse(content);
+                processCodeBlocks(contentDiv);
+            } else {
+                contentDiv.textContent = content;
+            }
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;                                 
+            }
+                           
+
 // 单独提取处理代码块的函数
 function processCodeBlocks(container) {
+    
     const codeBlocks = container.querySelectorAll('pre code');
     codeBlocks.forEach((codeBlock) => {
         // 如果已经处理过，则跳过
@@ -846,6 +917,7 @@ function processCodeBlocks(container) {
         copyButton.addEventListener('click', () => {
             navigator.clipboard.writeText(codeBlock.textContent);
             alert('代码已复制到剪贴板！');
+            vscode.postMessage({ command: 'copyCode' });
         });
 
         const insertButton = document.createElement('button');
@@ -918,6 +990,28 @@ function renderContextFiles() {
     });
 }
 
+// 渲染聊天记录
+function renderChatHistory(history) {
+    const messages = Array.from(messagesDiv.children);
+    messages.forEach(child => {
+        if (child.id !== 'welcome-message' && child.id !== 'welcome-actions') {
+            messagesDiv.removeChild(child);
+        }
+        });
+    console.log('渲染聊天记录', history);
+    history.forEach(msg => {
+        const sender = msg.role === 'user' ? 'user' : 'assistant';
+        appendHistory(sender,msg.content, true, null);
+    });
+}
+
+// 更新标题
+function updateTitle(title) {
+    document.getElementById('welcome-message').style.display = 'none';
+    document.getElementById('welcome-actions').style.display = 'none';
+    const titleElement = document.getElementById('chat-title');
+    titleElement.textContent = title || '未命名会话';
+}
 
 </script>
 

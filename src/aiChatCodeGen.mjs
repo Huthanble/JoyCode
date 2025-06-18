@@ -5,28 +5,93 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import { OpenAI } from 'openai';
+import { config } from 'dotenv';
+config({ path: `${__dirname}/.env` });
 // 设置环境变量以指定模型缓存路径
 // process.env.TRANSFORMERS_CACHE = modelPath;
-import { getOpenAIInstance, getSelectedModel } from './openaiClient.js';
+import { getOpenAIInstance, getSelectedModel,modelConfigs } from './openaiClient.js';
+//注册命令
+
+
+
 class ChatViewProvider {
   constructor(context) {
     this.context = context;
     this.chatHistoryPath = path.join(context.extensionPath, 'chatHistory.json');
+    console.log('聊天记录文件路径:', this.chatHistoryPath);
     this.systemPromptPath = path.join(context.extensionPath, 'systemPrompt.json');
     this.chatTitle='';
     // 初始化数据
     this.fileContent = '';
     this.filePath = '';
     this.contextFiles = [];
+    this.allSessions = {}; // 用于存储所有会话
     this.chatHistory = [];
+    this.sessionId = ''; // 初始化会话ID
     this.lastActiveEditor = vscode.window.activeTextEditor;
     this.aiRole = 'general'; 
     this.flaskEndpoint = '';
     this.flaskToken = '';
-    this.openai = getOpenAIInstance();  
+    this.deepseek = process.env.deepseek;
+    this.doubao = process.env.doubao;
+    this.model = 'deepseek-chat'; // 默认模型
+    this.modelConfig= {
+      'deepseek-chat': {
+        baseURL: 'https://api.deepseek.com/beta',
+        apiKey: this.deepseek,
+        model:'deepseek-chat'
+      },
+      'doubao':{
+        baseURL:'https://ark.cn-beijing.volces.com/api/v3/',
+        apiKey: this.doubao,
+        model: 'doubao-seed-1.6-250615'
+      }
+    };
+    this.openai=new OpenAI({
+        baseURL: this.modelConfig['deepseek-chat'].baseURL,
+        apiKey: this.modelConfig['deepseek-chat'].apiKey,
+      });
     this.loadSystemPrompt();
-    this.loadChatHistory();
-    
+    vscode.commands.registerCommand('chatCodeGen.selectHistorySession', async () => {
+      
+      if (!fs.existsSync(this.chatHistoryPath)) {
+        vscode.window.showInformationMessage('没有保存的历史聊天记录。');
+        return;
+      }
+
+      try {
+        const fileContent = fs.readFileSync(this.chatHistoryPath, 'utf-8');
+        const allSessions = JSON.parse(fileContent || '{}');
+
+        const items = Object.entries(allSessions).map(([sessionId, session]) => ({
+          label: session.title || `未命名会话 `,
+          sessionId: sessionId,
+          history: session.history,
+          title: session.title 
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+          placeHolder: '选择一个历史会话标题',
+        });
+
+        if (selected) {
+          this.sessionId = selected.sessionId;
+          this.chatTitle = selected.title;
+          this.chatHistory = selected.history || [];
+          console.log('选择的历史:', selected.history);
+          // 通知 Webview 渲染历史会话       
+            this.webviewView.webview.postMessage({
+              command: 'loadHistorySession',
+              sessionId: selected.sessionId,
+              title: selected.label,
+              history: selected.history
+            });
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage('加载聊天记录失败: ' + err.message);
+      }
+    });
     // 监听编辑器变化
     vscode.window.onDidChangeActiveTextEditor(() => {
       this.updateActiveEditorInfo();
@@ -52,14 +117,42 @@ class ChatViewProvider {
       this.chatHistory = [];
     }
   }
-  
-  saveChatHistory() {
-    try {
-      fs.writeFileSync(this.chatHistoryPath, JSON.stringify(this.chatHistory, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('保存聊天记录失败:', e);
-    }
+  generateSessionId() {
+    const now = new Date();
+    let newsessionId = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14); // 例：20240617115600
+    console.log('生成新的会话ID', newsessionId);
+    return newsessionId;
   }
+
+  startNewSession() {
+    console.log('开始新会话');
+    this.sessionId = this.generateSessionId(); // 新会话ID
+    this.chatHistory = [];      // 清空当前会话内容
+  }
+
+
+  saveChatHistory() {
+    console.log('保存一条聊天记录');
+    console.log('当前聊天记录:', this.chatHistory);
+      try {
+        // 如果已经有历史文件，就读出来
+        if (fs.existsSync(this.chatHistoryPath)) {
+          const fileContent = fs.readFileSync(this.chatHistoryPath, 'utf-8');
+          this.allSessions = JSON.parse(fileContent);
+        }
+
+        // 保存当前会话到对应的 sessionId 下
+        this.allSessions[this.sessionId] = {
+          title: this.chatTitle,
+          history: this.chatHistory
+        };
+
+        fs.writeFileSync(this.chatHistoryPath, JSON.stringify(this.allSessions, null, 2), 'utf-8');
+      } catch (e) {
+        console.error('保存聊天记录失败:', e);
+      }
+    }
+
   
   updateActiveEditorInfo() {
     const editor = vscode.window.activeTextEditor || this.lastActiveEditor;
@@ -134,16 +227,9 @@ class ChatViewProvider {
 
     // 初始化编辑器信息
     this.updateActiveEditorInfo();
+    this.startNewSession(); // 初始化会话
     
-    setTimeout(() => {
-      // 发送聊天历史
-      if (this.chatHistory.length > 0) {
-        webviewView.webview.postMessage({
-          command: 'initChatHistory',
-          history: this.chatHistory
-        });
-      }
-    }, 300);
+    
     
     // 处理前端消息
     webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -156,7 +242,11 @@ class ChatViewProvider {
             files: this.contextFiles
           });
           break;
-          
+
+        case 'invokeCommand':
+          vscode.commands.executeCommand(message.name);
+          break;
+
         case 'insertCode':
           const editor = vscode.window.activeTextEditor;
           if (editor) {
@@ -173,7 +263,11 @@ class ChatViewProvider {
             vscode.window.showErrorMessage('当前没有活动的编辑器，无法插入代码。');
           }
           break;
-          
+
+        case 'copyCode':
+          vscode.window.showInformationMessage('代码已成功复制到剪贴板！');
+          break;
+
         case 'selectContextFile':
           const options = {
             canSelectMany: false,
@@ -206,15 +300,17 @@ class ChatViewProvider {
         case 'importModel':
           await this.checkImportModel(message, webviewView);
           break;
-          
+        case 'changeModel':
+          this.model= message.model || 'deepseek-chat';
+          console.log('切换为模型:', this.model);
+          break;
         case 'regenerate':
           await this.handleRegenerateRequest(message, webviewView);
           break;
 
         case 'newChatWindow':
           // 处理新建聊天窗口的逻辑
-          this.chatHistory = [];
-          this.saveChatHistory();
+          this.startNewSession();
           this.chatTitle = '';
           // 通知前端清空消息
           webviewView.webview.postMessage({
@@ -231,7 +327,6 @@ class ChatViewProvider {
             miniapp: 'prompt_miniapp.json',
             webdev: 'prompt_webdev.json'
         };
-         
         const fileName = fileMap[this.aiRole] || 'prompt_general.json';
         const filePath = path.join(this.context.extensionPath, 'media', 'roles',fileName);
         // 用 VS Code API 打开文件
@@ -249,7 +344,7 @@ class ChatViewProvider {
   
   async handleAiRequest(message, webviewView) {
     const userInput = message.text;
-    const model = message.model || 'deepseek-chat';
+    this.model= message.model; // 获取当前模型
     // 根据当前 this.aiRole 读取对应的 JSON 文件内容
     const fileMap = {
         general: 'prompt_general.json',
@@ -298,29 +393,27 @@ class ChatViewProvider {
     }
     
     try {
-        const isFirstQuestion = this.chatHistory.filter(m => m.role === 'user').length === 1 && !this.chatTitle;
+        const isFirstQuestion =this.chatHistory.length === 1 && this.chatHistory[0].role === 'user' && !this.chatTitle;
         let reply = '';
         let chatTitle = '';
-
-      if (model === 'doubao') {
-        
-    } else if (model === 'deepseek-chat') {
-      if (isFirstQuestion) {
-        // 让AI同时返回回答和标题
-        const response = await this.openai.chat.completions.create({
-          model,
-          messages: [
-            {
-              role: "system",
-              content:
-                `这是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}\n请先回答用户问题，然后用一句话总结本次对话主题，格式为：\n【标题】xxxx`
-            },
-            ...this.chatHistory.map(msg => ({
-              role: msg.role,
-              content: msg.content
-            }))
-          ],
-        });
+      if (this.model === 'deepseek-chat') {
+        console.log('使用 DeepSeek 模型进行请求');
+        if (isFirstQuestion) {
+          // 让AI同时返回回答和标题
+          const response = await this.openai.chat.completions.create({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: "system",
+                content:
+                  `你是deepseek代码助手，这是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}\n请先回答用户问题，然后用一句话总结本次对话主题，格式为：\n【标题】xxxx`
+              },
+              ...this.chatHistory.map(msg => ({
+                role: msg.role,
+                content: msg.content
+              }))
+            ],
+          });
 
         const fullReply = response.choices[0]?.message?.content || "AI 无法生成回复。";
         // 提取标题
@@ -335,15 +428,18 @@ class ChatViewProvider {
         this.chatTitle = chatTitle;
         // 通知前端显示标题
         webviewView.webview.postMessage({ command: "setChatTitle", title: chatTitle });
+        this.allSessions[this.sessionId] = {
+          title: this.chatTitle  // 只添加 title 字段
+        };
       } else {
         // 普通回复
         const response = await this.openai.chat.completions.create({
-          model,
+          model: 'deepseek-chat',
           messages: [
             {
               role: "system",
               content:
-                `这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n`
+                `你是deepseek代码助手，这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n`
             },
             ...this.chatHistory.map(msg => ({
               role: msg.role,
@@ -352,6 +448,72 @@ class ChatViewProvider {
           ],
         });
         reply = response.choices[0]?.message?.content || "AI 无法生成回复。";
+      }
+    }
+    else if(this.model === 'doubao') {
+      console.log('使用 Doubao 模型进行请求');
+      this.openai = new OpenAI({
+        baseURL: this.modelConfig['doubao'].baseURL,
+        apiKey: this.modelConfig['doubao'].apiKey,
+      });
+      if (isFirstQuestion) {
+        const historyText = this.chatHistory.map(msg => {
+          return `${msg.role === 'user' ? '用户' : '助手'}：${msg.content}`;
+        }).join('\n');
+        // 让AI同时返回回答和标题
+        const messages = [
+          {
+            role: "system",
+            content: `你是豆包代码助手，这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}，下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是历史聊天记录：\n${historyText}\n请根据以上依据回答用户问题，并用一句话总结本次对话主题，格式为：\n【标题】xxxx`
+          },
+          {
+            role: "user",
+            content:userInput
+          }
+        ];
+
+        const response = await this.openai.chat.completions.create({
+          model: 'doubao-seed-1.6-250615',
+          messages: messages
+        });
+
+        const fullReply = response.choices[0]?.message?.content || "豆包模型无法生成回复。";
+        // 提取标题
+        const match = fullReply.match(/【标题】(.+)/);
+        if (match) {
+          reply = fullReply.replace(/【标题】.+/, '').trim();
+          chatTitle = match[1].trim();
+        } else {
+          reply = fullReply;
+          chatTitle = userInput.slice(0, 20); // 兜底
+        }
+        this.chatTitle = chatTitle;
+        // 通知前端显示标题
+        webviewView.webview.postMessage({ command: "setChatTitle", title: chatTitle });
+        this.allSessions[this.sessionId] = {
+          title: this.chatTitle  // 只添加 title 字段
+        };
+      } else {
+        // 普通回复
+        const historyText = this.chatHistory.map(msg => {
+          return `${msg.role === 'user' ? '用户' : '助手'}：${msg.content}`;
+        }).join('\n');
+        const messages = [
+          {
+            role: "system",
+            content: `你是豆包代码助手，这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是历史聊天记录：\n${historyText}\n请回答用户问题`
+          },
+          {
+            role: "user",
+            content: userInput
+          }
+        ];
+
+        const response = await this.openai.chat.completions.create({
+          model: 'doubao-seed-1.6-250615',
+          messages: messages
+        });
+        reply = response.choices[0]?.message?.content || "豆包模型无法生成回复。";
       }
     }
     else{
@@ -430,9 +592,32 @@ class ChatViewProvider {
 }
   
   async handleRegenerateRequest(message, webviewView) {
-    const model = message.model || 'deepseek-chat';
+    
     const lastUserMsg = this.chatHistory.filter(m => m.role === 'user').slice(-1)[0];
     if (!lastUserMsg) return;
+    // 准备提示词
+    const fileMap = {
+        general: 'prompt_general.json',
+        software: 'prompt_software.json',
+        backend: 'prompt_backend.json',
+        dbdesigner: 'prompt_dbdesigner.json',
+        miniapp: 'prompt_miniapp.json',
+        webdev: 'prompt_webdev.json'
+    };
+    const fileName = fileMap[this.aiRole] || 'prompt_general.json';
+    const filePath = path.join(this.context.extensionPath, 'media', 'roles', fileName);
+
+    let systemPrompt = '';
+    try {
+        if (fs.existsSync(filePath)) {
+            // 直接用整个 JSON 内容作为 systemPrompt
+            systemPrompt = fs.readFileSync(filePath, 'utf-8');
+        } else {
+            systemPrompt = '';
+        }
+    } catch (e) {
+        systemPrompt = '';
+    }
     
     // 准备上下文提示
     let contextPrompt = '';
@@ -443,22 +628,132 @@ class ChatViewProvider {
     }
     
     try {
-      const response = await openai.chat.completions.create({
-        model,
-        messages: [
+      const isFirstQuestion =this.chatHistory.length === 1 && this.chatHistory[0].role === 'user' && !this.chatTitle;
+        let reply = '';
+        let chatTitle = '';
+      if (this.model === 'deepseek-chat') {
+        console.log('使用 DeepSeek 模型进行请求');
+        if (isFirstQuestion) {
+          // 让AI同时返回回答和标题
+          const response = await this.openai.chat.completions.create({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: "system",
+                content:
+                  `你是deepseek代码助手，这是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}\n请先回答用户问题，然后用一句话总结本次对话主题，格式为：\n【标题】xxxx`
+              },
+              ...this.chatHistory.map(msg => ({
+                role: msg.role,
+                content: msg.content
+              }))
+            ],
+          });
+
+        const fullReply = response.choices[0]?.message?.content || "AI 无法生成回复。";
+        // 提取标题
+        const match = fullReply.match(/【标题】(.+)/);
+        if (match) {
+          reply = fullReply.replace(/【标题】.+/, '').trim();
+          chatTitle = match[1].trim();
+        } else {
+          reply = fullReply;
+          chatTitle = '新会话' // 兜底
+        }
+        this.chatTitle = chatTitle;
+        // 通知前端显示标题
+        webviewView.webview.postMessage({ command: "setChatTitle", title: chatTitle });
+        this.allSessions[this.sessionId] = {
+          title: this.chatTitle  // 只添加 title 字段
+        };
+      } else {
+        // 普通回复
+        const response = await this.openai.chat.completions.create({
+          model: 'deepseek-chat',
+          messages: [
+            {
+              role: "system",
+              content:
+                `你是deepseek代码助手，这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n`
+            },
+            ...this.chatHistory.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            }))
+          ],
+        });
+        reply = response.choices[0]?.message?.content || "AI 无法生成回复。";
+      }
+    }
+    else if(this.model === 'doubao') {
+      console.log('使用 Doubao 模型进行请求');
+      this.openai = new OpenAI({
+        baseURL: this.modelConfig['doubao'].baseURL,
+        apiKey: this.modelConfig['doubao'].apiKey,
+      });
+      if (isFirstQuestion) {
+        const historyText = this.chatHistory.map(msg => {
+          return `${msg.role === 'user' ? '用户' : '助手'}：${msg.content}`;
+        }).join('\n');
+        // 让AI同时返回回答和标题
+        const messages = [
           {
             role: "system",
-            content:
-              `${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n你是代码助手，请阅读文件内容并回答问题。`
+            content: `你是豆包代码助手，这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}，下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是历史聊天记录：\n${historyText}\n请根据以上依据回答用户问题，并用一句话总结本次对话主题，格式为：\n【标题】xxxx`
           },
-          ...this.chatHistory.filter(m => m.role !== 'assistant').map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
-        ],
-      });
+          {
+            role: "user",
+            content: lastUserMsg.content
+          }
+        ];
+
+        const response = await this.openai.chat.completions.create({
+          model: 'doubao-seed-1.6-250615',
+          messages: messages
+        });
+
+        const fullReply = response.choices[0]?.message?.content || "豆包模型无法生成回复。";
+        // 提取标题
+        const match = fullReply.match(/【标题】(.+)/);
+        if (match) {
+          reply = fullReply.replace(/【标题】.+/, '').trim();
+          chatTitle = match[1].trim();
+        } else {
+          reply = fullReply;
+          chatTitle = '新会话'; // 兜底
+        }
+        this.chatTitle = chatTitle;
+        // 通知前端显示标题
+        webviewView.webview.postMessage({ command: "setChatTitle", title: chatTitle });
+        this.allSessions[this.sessionId] = {
+          title: this.chatTitle  // 只添加 title 字段
+        };
+      } else {
+        // 普通回复
+        const historyText = this.chatHistory.map(msg => {
+          return `${msg.role === 'user' ? '用户' : '助手'}：${msg.content}`;
+        }).join('\n');
+        const messages = [
+          {
+            role: "system",
+            content: `你是豆包代码助手，这是用户提供的json格式提示词模板，请转换为自然语言并理解：${systemPrompt}下面是用户提供的关联上下文文件：${contextPrompt}\n当前文件路径: ${this.filePath}\n文件内容:\n${this.fileContent}\n这是历史聊天记录：\n${historyText}\n请回答用户问题`
+          },
+          {
+            role: "user",
+            content: lastUserMsg.content
+          }
+        ];
+
+        const response = await this.openai.chat.completions.create({
+          model: 'doubao-seed-1.6-250615',
+          messages: messages
+        });
+        reply = response.choices[0]?.message?.content || "豆包模型无法生成回复。";
+      }
+    }
+    else{
       
-      const reply = response.choices[0]?.message?.content || "AI 无法生成回复。";
+    }
       const lastAiIdx = this.chatHistory.map(m => m.role).lastIndexOf('assistant');
       
       if (lastAiIdx !== -1) {
