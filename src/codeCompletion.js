@@ -3,13 +3,29 @@ const { OpenAI } = require("openai");
 const path = require("path");
 const { execSync } = require("child_process");
 const fs = require("fs");
-const { getOpenAIInstance, getSelectedModel } = require("./openaiClient");
 const Handlebars = require("handlebars");
 const glob = require("glob");
 const { HNSWLib } = require("@langchain/community/vectorstores/hnswlib");
 const { OpenAIEmbeddings } = require("@langchain/openai"); // 用于检索时自动embedding
 const { getEmbedding } = require('./embedding-local');
 const Parser = require('tree-sitter');
+
+// 为这个模块专门定义 getOpenAIInstance 和 getSelectedModel
+// 这些函数会覆盖原始导入的函数
+function getOpenAIInstance() {
+  // 直接返回 deepseek-chat 的配置
+  const deepseek = process.env.deepseek; // 确保能访问到环境变量
+  
+  return new OpenAI({
+    baseURL: 'https://api.deepseek.com/beta',
+    apiKey: deepseek,
+  });
+}
+
+function getSelectedModel() {
+  // 直接返回 'deepseek-chat'
+  return 'deepseek-chat';
+}
 
 // 导入各种语言的语法解析器
 const LANG_MAP = {
