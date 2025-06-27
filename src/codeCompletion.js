@@ -7,39 +7,39 @@ const Handlebars = require("handlebars");
 const glob = require("glob");
 const { HNSWLib } = require("@langchain/community/vectorstores/hnswlib");
 const { OpenAIEmbeddings } = require("@langchain/openai"); // 用于检索时自动embedding
-const { getEmbedding } = require('./embedding-local');
-const Parser = require('tree-sitter');
+const { getEmbedding } = require("./embedding-local");
+const Parser = require("tree-sitter");
 
 // 为这个模块专门定义 getOpenAIInstance 和 getSelectedModel
 // 这些函数会覆盖原始导入的函数
 function getOpenAIInstance() {
   // 直接返回 deepseek-chat 的配置
   const deepseek = process.env.deepseek; // 确保能访问到环境变量
-  
+
   return new OpenAI({
-    baseURL: 'https://api.deepseek.com/beta',
+    baseURL: "https://api.deepseek.com/beta",
     apiKey: deepseek,
   });
 }
 
 function getSelectedModel() {
   // 直接返回 'deepseek-chat'
-  return 'deepseek-chat';
+  return "deepseek-chat";
 }
 
 // 导入各种语言的语法解析器
 const LANG_MAP = {
-  '.js': require('tree-sitter-javascript'),
-  '.ts': require('tree-sitter-javascript'),
-  '.tsx': require('tree-sitter-javascript'),
-  '.jsx': require('tree-sitter-javascript'),
-  '.py': require('tree-sitter-python'),
-  '.java': require('tree-sitter-java'),
-  '.c': require('tree-sitter-c'),
-  '.h': require('tree-sitter-c'),
-  '.cpp': require('tree-sitter-cpp'),
-  '.cc': require('tree-sitter-cpp'),
-  '.hpp': require('tree-sitter-cpp'),
+  ".js": require("tree-sitter-javascript"),
+  ".ts": require("tree-sitter-javascript"),
+  ".tsx": require("tree-sitter-javascript"),
+  ".jsx": require("tree-sitter-javascript"),
+  ".py": require("tree-sitter-python"),
+  ".java": require("tree-sitter-java"),
+  ".c": require("tree-sitter-c"),
+  ".h": require("tree-sitter-c"),
+  ".cpp": require("tree-sitter-cpp"),
+  ".cc": require("tree-sitter-cpp"),
+  ".hpp": require("tree-sitter-cpp"),
   // 可根据需要添加其他语言
 };
 
@@ -47,7 +47,7 @@ const LANG_MAP = {
 class LocalEmbeddings {
   async embedDocuments(texts) {
     // texts: string[]
-    return Promise.all(texts.map(t => getEmbedding(t)));
+    return Promise.all(texts.map((t) => getEmbedding(t)));
   }
   async embedQuery(text) {
     return getEmbedding(text);
@@ -123,7 +123,7 @@ async function getSuggestion(document, position) {
       // 你可以根据实际情况调整 topN
       ragContext = await getRagContext(prompt, 5, rootDir, document);
 
-      console.log("rag:",ragContext);
+      console.log("rag:", ragContext);
     }
   }
 
@@ -251,7 +251,12 @@ async function getSuggestion(document, position) {
       return response.choices[0].text.trim();
     }
   } catch (error) {
-    console.error("调用", vscode.workspace.getConfiguration("navicode").get("selectedModel", 'deepseek-chat'));
+    console.error(
+      "调用",
+      vscode.workspace
+        .getConfiguration("navicode")
+        .get("selectedModel", "deepseek-chat")
+    );
     console.error("API 出错:", error);
     return null;
   }
@@ -268,7 +273,7 @@ async function getSuggestion(document, position) {
 async function getRagContext(queryText, topN, rootDir, document) {
   // 在查询时构建仓库
   await buildRagRepositoryOnDemand(rootDir, document);
-  
+
   const results = await queryRagSnippetsHNSW(queryText, topN, rootDir);
   return results
     .map(
@@ -287,28 +292,30 @@ async function buildRagRepositoryOnDemand(rootDir, document) {
   const tempFilePath = path.join(rootDir, ".navicode_temp");
   const currentFilePath = document.fileName;
   const dbPath = path.join(rootDir, ".navicode_hnsw");
-  
+
   try {
     // 检查是否需要重建仓库
     let needRebuild = true;
-    
+
     if (fs.existsSync(tempFilePath)) {
       try {
-        const data = JSON.parse(fs.readFileSync(tempFilePath, 'utf8'));
+        const data = JSON.parse(fs.readFileSync(tempFilePath, "utf8"));
         if (data.lastFile === currentFilePath) {
           needRebuild = false;
         } else {
-          console.log(`文件已切换: ${data.lastFile} -> ${currentFilePath}，重建仓库`);
+          console.log(
+            `文件已切换: ${data.lastFile} -> ${currentFilePath}，重建仓库`
+          );
         }
       } catch (e) {
         console.error("读取临时文件失败:", e);
       }
     }
-    
+
     if (!needRebuild) {
       return;
     }
-    
+
     // 彻底清除旧的向量数据库
     hnswStore = null;
     if (fs.existsSync(dbPath)) {
@@ -320,29 +327,44 @@ async function buildRagRepositoryOnDemand(rootDir, document) {
         console.error("删除旧数据库失败:", err);
       }
     }
-    
+
     // 查找当前文件的头文件依赖
     const relatedFiles = await findHeaderDependencies(document, rootDir);
-    
+
     // 创建新的空仓库实例
-    const store = new HNSWLib(
-      new LocalEmbeddings(),
-      { space: "cosine" }
-    );
-    
+    const store = new HNSWLib(new LocalEmbeddings(), { space: "cosine" });
+
+    if (relatedFiles.length === 0) {
+      // 没有相关文件，创建一个空的仓库
+      // 修改这部分代码 - 不能直接保存空仓库
+
+      // 添加一个空的占位文档，避免初始化错误
+      await store.addDocuments([
+        {
+          pageContent: "Empty placeholder document",
+          metadata: {
+            file: "placeholder",
+            start: 0,
+            end: 0,
+            id: "placeholder_0_0",
+          },
+        },
+      ]);
+    }
+
     if (relatedFiles.length > 0) {
       // 只处理相关文件，不包含当前文件
       const chunks = [];
-      
+
       // 添加相关文件
       for (const file of relatedFiles) {
         if (file === currentFilePath) continue; // 确保跳过当前文件
-        
+
         try {
           const content = fs.readFileSync(file, "utf8");
           const fileChunks = splitByTreeSitter(content, file);
-          
-          fileChunks.forEach(chunk => {
+
+          fileChunks.forEach((chunk) => {
             chunks.push({
               id: `${path.relative(rootDir, file)}_${chunk.start}_${chunk.end}`,
               file: path.relative(rootDir, file),
@@ -355,10 +377,10 @@ async function buildRagRepositoryOnDemand(rootDir, document) {
           console.error(`读取相关文件失败: ${file}`, error);
         }
       }
-      
+
       // 如果有块，添加到新仓库
       if (chunks.length > 0) {
-        const docs = chunks.map(chunk => ({
+        const docs = chunks.map((chunk) => ({
           pageContent: chunk.text,
           metadata: {
             file: chunk.file,
@@ -370,20 +392,22 @@ async function buildRagRepositoryOnDemand(rootDir, document) {
         await store.addDocuments(docs);
       }
     }
-    
+
     // 保存新仓库
     await store.save(dbPath);
     hnswStore = store;
-    
+
     // 保存仓库状态
-    fs.writeFileSync(tempFilePath, JSON.stringify({
-      lastFile: currentFilePath,
-      timestamp: new Date().toISOString(),
-      fileCount: relatedFiles.length
-    }));
-    
+    fs.writeFileSync(
+      tempFilePath,
+      JSON.stringify({
+        lastFile: currentFilePath,
+        timestamp: new Date().toISOString(),
+        fileCount: relatedFiles.length,
+      })
+    );
+
     console.log(`新仓库已构建，包含 ${relatedFiles.length} 个相关文件`);
-    
   } catch (error) {
     console.error("构建RAG仓库失败:", error);
     // 构建失败时，创建一个空仓库
@@ -391,8 +415,6 @@ async function buildRagRepositoryOnDemand(rootDir, document) {
     await hnswStore.save(dbPath);
   }
 }
-
-
 
 /**
  * 查找当前文件的头文件依赖
@@ -404,16 +426,22 @@ async function findHeaderDependencies(document, rootDir) {
   const filePath = document.fileName;
   const content = document.getText();
   const language = document.languageId;
-  
+
   // 收集所有相关文件
   const relatedFiles = new Set();
   const visited = new Set();
-  
+
   // 递归查找依赖
-  await findDependenciesRecursive(filePath, language, rootDir, relatedFiles, visited);
-  
+  await findDependenciesRecursive(
+    filePath,
+    language,
+    rootDir,
+    relatedFiles,
+    visited
+  );
+
   // 转换为数组，并过滤掉当前文件
-  return Array.from(relatedFiles).filter(file => file !== filePath);
+  return Array.from(relatedFiles).filter((file) => file !== filePath);
 }
 
 /**
@@ -425,39 +453,54 @@ async function findHeaderDependencies(document, rootDir) {
  * @param {Set<string>} visited - 已访问的文件
  * @returns {Promise<void>}
  */
-async function findDependenciesRecursive(filePath, language, rootDir, relatedFiles, visited) {
+async function findDependenciesRecursive(
+  filePath,
+  language,
+  rootDir,
+  relatedFiles,
+  visited
+) {
   if (visited.has(filePath)) return;
   visited.add(filePath);
-  
+
   try {
     // 读取文件内容
-    const content = fs.readFileSync(filePath, 'utf8');
-    
+    const content = fs.readFileSync(filePath, "utf8");
+
     // 提取导入路径
     const importPaths = extractImportPaths(content, language, filePath);
-    
+
     // 查找文件
     for (const importPath of importPaths) {
       const files = await findFilesInProject(importPath);
-      
+
       for (const file of files) {
         if (!visited.has(file)) {
           relatedFiles.add(file);
-          
+
           // 递归查找依赖，但限制深度
-          if (visited.size < 20) { // 限制递归深度
+          if (visited.size < 20) {
+            // 限制递归深度
             // 确定文件语言类型
             const fileExt = path.extname(file).toLowerCase();
             let fileLanguage = language;
-            
+
             // 根据扩展名调整语言
-            if (fileExt === '.py') fileLanguage = 'python';
-            else if (fileExt === '.java') fileLanguage = 'java';
-            else if (['.c', '.h'].includes(fileExt)) fileLanguage = 'c';
-            else if (['.cpp', '.hpp', '.cc'].includes(fileExt)) fileLanguage = 'cpp';
-            else if (['.js', '.ts'].includes(fileExt)) fileLanguage = 'javascript';
-            
-            await findDependenciesRecursive(file, fileLanguage, rootDir, relatedFiles, visited);
+            if (fileExt === ".py") fileLanguage = "python";
+            else if (fileExt === ".java") fileLanguage = "java";
+            else if ([".c", ".h"].includes(fileExt)) fileLanguage = "c";
+            else if ([".cpp", ".hpp", ".cc"].includes(fileExt))
+              fileLanguage = "cpp";
+            else if ([".js", ".ts"].includes(fileExt))
+              fileLanguage = "javascript";
+
+            await findDependenciesRecursive(
+              file,
+              fileLanguage,
+              rootDir,
+              relatedFiles,
+              visited
+            );
           }
         }
       }
@@ -510,7 +553,7 @@ function splitByLines(content, chunkSize = 50) {
 
 /**
  * 根据文件扩展名获取对应的语言解析器
- * @param {string} filePath 
+ * @param {string} filePath
  * @returns {any} 语言解析器或null
  */
 function getLanguageParser(filePath) {
@@ -536,15 +579,15 @@ function splitByTreeSitter(content, filePath) {
     parser.setLanguage(Language);
     const tree = parser.parse(content);
     const chunks = [];
-    
+
     // 收集代码中的函数/类/方法定义
     collectStructureNodes(tree.rootNode, content, chunks);
-    
+
     // 如果没有找到任何结构，回退到按行分块
     if (chunks.length === 0) {
       return splitByLines(content, 50);
     }
-    
+
     // 填补结构之间的空隙代码（如全局变量、导入语句等）
     const filledChunks = fillGaps(chunks, content);
     return filledChunks;
@@ -564,25 +607,31 @@ function splitByTreeSitter(content, filePath) {
 function collectStructureNodes(node, content, chunks) {
   // 不同语言的结构节点类型
   const structureTypes = [
-    'function_definition', 'function_declaration', 'method_definition',
-    'class_declaration', 'class_definition',
-    'function', 'method', 'class',
-    'arrow_function', 'constructor_definition'
+    "function_definition",
+    "function_declaration",
+    "method_definition",
+    "class_declaration",
+    "class_definition",
+    "function",
+    "method",
+    "class",
+    "arrow_function",
+    "constructor_definition",
   ];
-  
+
   if (structureTypes.includes(node.type)) {
     // 计算行号（从1开始）
     const startLine = node.startPosition.row + 1;
     const endLine = node.endPosition.row + 1;
-    
+
     chunks.push({
       type: node.type,
       start: startLine,
       end: endLine,
-      text: content.substring(node.startIndex, node.endIndex)
+      text: content.substring(node.startIndex, node.endIndex),
     });
   }
-  
+
   // 递归遍历子节点
   for (const child of node.children) {
     collectStructureNodes(child, content, chunks);
@@ -598,50 +647,50 @@ function collectStructureNodes(node, content, chunks) {
 function fillGaps(chunks, content) {
   // 按开始行排序
   chunks.sort((a, b) => a.start - b.start);
-  
-  const lines = content.split('\n');
+
+  const lines = content.split("\n");
   const result = [];
   let currentLine = 1;
-  
+
   for (const chunk of chunks) {
     // 处理结构前的代码
     if (chunk.start > currentLine) {
-      const gapText = lines.slice(currentLine - 1, chunk.start - 1).join('\n');
+      const gapText = lines.slice(currentLine - 1, chunk.start - 1).join("\n");
       if (gapText.trim()) {
         result.push({
-          type: 'gap',
+          type: "gap",
           start: currentLine,
           end: chunk.start - 1,
-          text: gapText
+          text: gapText,
         });
       }
     }
-    
+
     // 添加结构块
     result.push(chunk);
     currentLine = chunk.end + 1;
   }
-  
+
   // 处理最后一个结构后的代码
   if (currentLine <= lines.length) {
-    const gapText = lines.slice(currentLine - 1).join('\n');
+    const gapText = lines.slice(currentLine - 1).join("\n");
     if (gapText.trim()) {
       result.push({
-        type: 'gap',
+        type: "gap",
         start: currentLine,
         end: lines.length,
-        text: gapText
+        text: gapText,
       });
     }
   }
-  
+
   return result;
 }
 
 /**
  * 按行拆分（回退方案）
- * @param {string} content 
- * @param {number} chunkSize 
+ * @param {string} content
+ * @param {number} chunkSize
  * @returns {Array<{start, end, text}>}
  */
 function splitByLines(content, chunkSize = 50) {
@@ -695,15 +744,9 @@ async function getHNSWStore(rootDir) {
   if (hnswStore) return hnswStore;
 
   if (fs.existsSync(dbPath)) {
-    hnswStore = await HNSWLib.load(
-      dbPath,
-      new LocalEmbeddings()
-    );
+    hnswStore = await HNSWLib.load(dbPath, new LocalEmbeddings());
   } else {
-    hnswStore = new HNSWLib(
-      new LocalEmbeddings(),
-      { space: "cosine" }
-    );
+    hnswStore = new HNSWLib(new LocalEmbeddings(), { space: "cosine" });
   }
   return hnswStore;
 }
@@ -1149,31 +1192,13 @@ function activateCodeCompletion(context) {
   );
 
   // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
+  // 注册快捷键命令来触发建议生成 (Alt+Ctrl+.)
   context.subscriptions.push(
     vscode.commands.registerCommand("navicode.generateSuggestion", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || !languages.includes(editor.document.languageId)) return;
-
-      // 显示加载提示
-      showLoadingIndicator(editor);
-
-      try {
-        // 标记为手动触发
-        isManuallyTriggered = true;
-
-        // 触发内联补全
-        await vscode.commands.executeCommand(
-          "editor.action.inlineSuggest.trigger"
-        );
-      } finally {
-        // 重置标记
-        setTimeout(() => {
-          isManuallyTriggered = false;
-        }, 500);
-
-        // 无论成功与否，都隐藏加载提示
-        hideLoadingIndicator();
-      }
+      // 不再需要 isManuallyTriggered 标志和 setTimeout
+      await vscode.commands.executeCommand(
+        "editor.action.inlineSuggest.trigger"
+      );
     })
   );
 
@@ -1187,19 +1212,22 @@ function activateCodeCompletion(context) {
         provideInlineCompletionItems: async (
           document,
           position,
-          context,
+          context, // <--- 使用这个 context 参数
           token
         ) => {
-          // 检查是否应该提供补全
           const autoTriggerEnabled = isAutoTriggerEnabled();
 
-          // 如果自动触发被禁用且不是手动触发，则不提供补全
-          if (!autoTriggerEnabled && !isManuallyTriggered) {
+          // 判断触发类型
+          const isManual =
+            context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke;
+
+          // 如果自动触发被禁用，并且不是手动触发，则直接返回
+          if (!autoTriggerEnabled && !isManual) {
             return null;
           }
 
-          if (isManuallyTriggered) {
-            // 显示加载提示
+          // 如果是手动触发，显示加载提示
+          if (isManual) {
             const editor = vscode.window.activeTextEditor;
             if (editor && editor.document === document) {
               showLoadingIndicator(editor);
@@ -1207,17 +1235,18 @@ function activateCodeCompletion(context) {
           }
 
           try {
-            // 获取建议
             const suggestion = await getSuggestion(document, position);
             if (!suggestion) return null;
 
-            // 创建内联补全项
             const item = new vscode.InlineCompletionItem(suggestion);
             item.range = new vscode.Range(position, position);
 
+            // 如果是手动触发，我们可以关联一个命令，但这通常不是必须的
+            // item.command = { ... }
+
             return [item];
           } finally {
-            // 隐藏加载提示
+            // 无论如何都隐藏加载提示
             hideLoadingIndicator();
           }
         },
