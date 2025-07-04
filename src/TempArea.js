@@ -21,7 +21,7 @@ function showTempAreaPanel() {
   }
   tempAreaPanel = vscode.window.createWebviewPanel(
     'tempAreaPanel',
-    '临时可视化区域',
+    '临时记忆区',
     vscode.ViewColumn.Beside,
     {
       enableScripts: true,
@@ -38,7 +38,7 @@ function registerMessageListener(panel) {
   panel.webview.onDidReceiveMessage((message) => {
     if (message.type === 'saveContent') {
       tempAreaContent = message.text || '';
-      vscode.window.showInformationMessage('临时区域内容已保存 ✅');
+      vscode.window.showInformationMessage('临时记忆区内容变更已保存 ✅');
     }
   });
 }
@@ -62,7 +62,7 @@ function getTempAreaHtml(content) {
         }
         textarea {
           width: 100%;
-          height: 300px;
+          height: 700px;
           padding: 12px;
           font-size: 14px;
           border: 1px solid #ccc;
@@ -95,10 +95,10 @@ function getTempAreaHtml(content) {
       </style>
     </head>
     <body>
-      <h3>🧠 临时可视化区域</h3>
+      <h3>🧠 临时记忆区</h3>
       <textarea id="codeArea">${content}</textarea><br/>
       <button onclick="saveContent()">💾 保存内容</button>
-      <div class="footer">你可以在这里编辑上下文，然后点击“保存内容”来更新临时区域。</div>
+      <div class="footer">你可以在这里编辑上下文，然后点击“保存内容”来更新临时记忆区。</div>
 
       <script>
         const vscode = acquireVsCodeApi();
@@ -120,7 +120,7 @@ function activateTempArea(context) {
         const selectedText = editor.document.getText(editor.selection);
         if (selectedText.trim()) {
           addToTempArea(selectedText);
-          vscode.window.showInformationMessage('已加入临时区域');
+          vscode.window.showInformationMessage('已加入临时记忆区');
         }
       }
     }),

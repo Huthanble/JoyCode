@@ -171,19 +171,19 @@
       },
       {
         "command": "extension.commentToCode",
-        "title": "将注释转换为代码"
+        "title": "智能生成"
       },
       {
         "command": "extension.codeFromTempArea",
-        "title": "用临时可视化区域产生代码"
+        "title": "用临时记忆区产生代码"
       },
       {
         "command": "extension.addToTempArea",
-        "title": "加入临时可视化区域"
+        "title": "加入临时记忆区"
       },
       {
         "command": "extension.showTempArea",
-        "title": "显示临时可视化区域"
+        "title": "显示临时记忆区"
       },
       {
         "command": "navicode.editCustomPrompt",
